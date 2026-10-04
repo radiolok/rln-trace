@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "filename": "probe.kicad_pro",
+    "version": 3
+  },
+  "sheets": [
+    [
+      "b7f80631-d8c6-5f4e-9cc9-f25a8da6aba1",
+      "Root"
+    ],
+    [
+      "1bc07701-06f4-5185-a58b-93472ac39d75",
+      "USB-C, USB3 mux, power"
+    ],
+    [
+      "2e7b777b-feba-5c1b-959a-c79baf727dac",
+      "CH569W USB3 bridge"
+    ],
+    [
+      "09129fe8-834d-5b54-8ea4-e4199833538c",
+      "GW2AR-18 QN88 FPGA"
+    ],
+    [
+      "1f3a828b-7db1-5bed-a25c-93055b4283af",
+      "MIPI20 target interface"
+    ],
+    [
+      "e498519b-290c-5cf6-9c9a-4ee5b05fc9fc",
+      "SMA triggers / reference"
+    ]
+  ],
+  "boards": [],
+  "libraries": {
+    "pinned_footprint_libs": [],
+    "pinned_symbol_libs": []
+  },
+  "schematic": {
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "text_variables": {}
+}

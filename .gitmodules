@@ -1,0 +1,20 @@
+[submodule "au/orbtrace"]
+	path = au/orbtrace
+	url = https://github.com/orbcode/orbtrace
+	shallow = true
+[submodule "au/orbuculum"]
+	path = au/orbuculum
+	url = https://github.com/orbcode/orbuculum
+	shallow = true
+[submodule "au/opencsd"]
+	path = au/opencsd
+	url = https://github.com/Linaro/OpenCSD
+	shallow = true
+[submodule "au/free-dap"]
+	path = au/free-dap
+	url = https://github.com/ataradov/free-dap
+	shallow = true
+[submodule "au/hydrausb3_fw"]
+	path = au/hydrausb3_fw
+	url = https://github.com/hydrausb3/hydrausb3_fw
+	shallow = true

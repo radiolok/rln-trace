@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+tools/schgen/preview/
+# KiCad
+*-backups/
+*.kicad_prl
+fp-info-cache
+*.lck
+_autosave-*
+# build
+build/
+out/
+target/
