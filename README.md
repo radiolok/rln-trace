@@ -37,7 +37,7 @@ rln-trace закрывает этот пробел:
 | Функции | трасса и события | трасса, события, SWD/JTAG, питание цели |
 | Статус | ждём прибор, готовим boundary scan | схема rev 0.1, макет на Tang Nano 20K + CH569 |
 
-Подробно: [hw/README.md](hw/README.md).
+Подробно: [hw/README.md](hw/README.md). Стенд для макета: [doc/bench.md](doc/bench.md).
 
 ## Структура репозитория
 
