@@ -288,10 +288,9 @@ def bench():
                                             'BL616: JTAG ПЛИС + UART'], 'fpga', bold=True)
     d.box(774, y, 190, h, 'FT2232H breakout', ['канал A: кадры TPIU', '(sync bitbang, шаг 1)', 'канал B: UART',
                                                'к USART2 цели'], 'neutral')
-    d.box(994, y, 150, 84, 'DOROGO', ['PPS / 10 МГц TTL', '(по желанию)'], 'ext')
     d.box(474, 640, 490, 110, 'STM32F4-Discovery (цель)', ['STM32F407VG, 168 МГц; TRACECLK PE2, TRACED0–3 PE3–PE6',
                                                          'встроенный ST-LINK/V2: SWD, прошивка, включение трассы',
-                                                         'PE3 общий с CS акселерометра'], 'target')
+                                                         'PPS: выход таймера (TIM1_CH1, PA8) + ITM-маркер'], 'target')
     # USB3
     d.arrow([(380, 214), (380, 372), (114, 372), (114, y)], color=G3, width=3, both=True,
             label='USB3 SS', lpos=(250, 366), lcolor=G3)
@@ -306,13 +305,13 @@ def bench():
     # signals
     d.arrow([(424, 470), (474, 470)], color=BL, width=2.5, both=True, label='HSPI', lpos=(449, 456), lcolor=BL)
     d.arrow([(774, 470), (724, 470)], color=OR, dash=True, label='TPIU', lpos=(749, 456), lcolor=OR)
-    d.arrow([(599, 640), (599, y + h)], color=OR, width=2.5, label='TRACECLK + TRACED0–3', lpos=(605, 612),
-            lanchor='start', lcolor=OR)
+    d.arrow([(599, 640), (599, y + h)], color=OR, width=2.5, label='TRACECLK + TRACED0–3', lpos=(593, 612),
+            lanchor='end', lcolor=OR)
     d.arrow([(869, y + h), (869, 640)], color=PU, width=2, both=True, label='UART', lpos=(875, 612),
             lanchor='start', lcolor=PU)
-    d.arrow([(1069, y + 84), (1069, 590), (690, 590), (690, y + h)], color=TE, label='PPS', lpos=(1000, 584), lcolor=TE)
-    d.arrow([(114, y + h), (114, 600), (449, 600), (449, 486)], color=TE, dash=True,
-            label='щупы анализатора', lpos=(250, 594), lcolor=TE)
+    d.arrow([(700, 640), (700, y + h)], color=TE, width=2, label='PPS', lpos=(706, 612), lanchor='start', lcolor=TE)
+    d.arrow([(114, y + h), (114, 588), (449, 588), (449, 486)], color=TE, dash=True,
+            label='щупы анализатора', lpos=(250, 582), lcolor=TE)
     d.line_legend(24, 782, [(G3, False, 3, 'USB3 SS'), (G2, False, 1.8, 'USB2'), (BL, False, 2.5, 'HSPI'),
                             (OR, False, 2.5, 'трасса'), (PU, False, 2, 'UART'), (TE, False, 1.8, 'PPS'),
                             (TE, True, 1.8, 'щупы')])
