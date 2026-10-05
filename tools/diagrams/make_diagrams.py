@@ -315,7 +315,7 @@ def bench():
     d.line_legend(24, 782, [(G3, False, 3, 'USB3 SS'), (G2, False, 1.8, 'USB2'), (BL, False, 2.5, 'HSPI'),
                             (OR, False, 2.5, 'трасса'), (PU, False, 2, 'UART'), (TE, False, 1.8, 'PPS'),
                             (TE, True, 1.8, 'щупы')])
-    d.save('bench.svg', DOC_IMG)
+    d.save('test-bench.svg', DOC_IMG)
 
 if __name__ == '__main__':
     system(); frontend(); gateware(); fsm(); events(); bench()
