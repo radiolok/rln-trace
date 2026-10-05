@@ -273,12 +273,12 @@ DOC_IMG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../doc/im
 
 
 def bench():
-    d = D(1160, 790, 'Отладочный стенд: макет зонда на Tang Nano 20K + CH569',
+    d = D(1180, 800, 'Отладочный стенд: макет зонда на Tang Nano 20K + CH569',
           'Всё управляется с одного ПК; USB-коммутатор передёргивает питание устройств без рук.')
     G3, G2, BL, OR, PU, TE = '#13924F', '#6B7280', '#1C64F2', '#E8590C', '#7C3AED', '#0B8EA0'
     d.box(330, 84, 480, 130, 'Хост-ПК (Linux)', ['rln-trace, OpenOCD, PulseView / sigrok',
                                                   'openFPGALoader / Gowin Programmer, wchisp',
-                                                  'Orbuculum, OpenCSD', 'SSH / Telnet для удалённой отладки'], 'host')
+                                                  'Orbuculum, OpenCSD, pyftdi', 'SSH / Telnet для удалённой отладки'], 'host')
     d.box(700, 262, 300, 84, 'USB-коммутатор', ['хаб с управлением питанием портов', '(uhubctl): сброс без рук'],
           'neutral')
     y, h = 420, 130
@@ -286,11 +286,12 @@ def bench():
     d.box(224, y, 200, h, 'Плата CH569', ['HydraUSB3 / WCH EVT', 'USB3 SS → ПК', 'HSPI 8 бит → ПЛИС', 'прошивка: fw/'], 'usb')
     d.box(474, y, 250, h, 'Tang Nano 20K', ['GW2AR-18 QN88 (как в зонде B)', 'приём трассы, метки времени', 'самотест PRBS',
                                             'BL616: JTAG ПЛИС + UART'], 'fpga', bold=True)
-    d.box(774, y, 170, h, 'FT2232H', ['медленные кадры', 'TPIU вручную', '(шаг 1 плана)', 'MPSSE / bitbang'], 'neutral')
-    d.box(964, y, 172, h, 'ST-LINK / J-Link', ['SWD к STM32', 'через OpenOCD', '(пока своя отладка', ' не готова)'], 'neutral')
-    d.box(474, 630, 250, 100, 'STM32F407 (цель)', ['плата DOROGO или отладочная', 'TRACECLK PE2, TRACED0–3 PE3–6',
-                                                  'SWD: PA13 / PA14'], 'target')
-    d.box(774, 630, 170, 70, 'DOROGO', ['PPS / 10 МГц TTL', '(по желанию)'], 'ext')
+    d.box(774, y, 190, h, 'FT2232H breakout', ['канал A: кадры TPIU', '(sync bitbang, шаг 1)', 'канал B: UART',
+                                               'к USART2 цели'], 'neutral')
+    d.box(994, y, 150, 84, 'DOROGO', ['PPS / 10 МГц TTL', '(по желанию)'], 'ext')
+    d.box(474, 640, 490, 110, 'STM32F4-Discovery (цель)', ['STM32F407VG, 168 МГц; TRACECLK PE2, TRACED0–3 PE3–PE6',
+                                                         'встроенный ST-LINK/V2: SWD, прошивка, включение трассы',
+                                                         'PE3 общий с CS акселерометра'], 'target')
     # USB3
     d.arrow([(380, 214), (380, 372), (114, 372), (114, y)], color=G3, width=3, both=True,
             label='USB3 SS', lpos=(250, 366), lcolor=G3)
@@ -299,23 +300,23 @@ def bench():
     d.arrow([(790, 214), (790, 238), (850, 238), (850, 262)], color=G2, both=True, label='USB2', lpos=(856, 252),
             lanchor='start')
     d.arrow([(760, 346), (760, 392), (660, 392), (660, y)], color=G2, both=True)
-    d.arrow([(859, 346), (859, y)], color=G2, both=True)
-    d.arrow([(950, 346), (950, 392), (1050, 392), (1050, y)], color=G2, both=True)
+    d.arrow([(869, 346), (869, y)], color=G2, both=True)
+    d.arrow([(970, 346), (970, 380), (1164, 380), (1164, 700), (964, 700)], color=G2, both=True,
+            label='USB (ST-LINK)', lpos=(1158, 640), lanchor='end')
     # signals
     d.arrow([(424, 470), (474, 470)], color=BL, width=2.5, both=True, label='HSPI', lpos=(449, 456), lcolor=BL)
     d.arrow([(774, 470), (724, 470)], color=OR, dash=True, label='TPIU', lpos=(749, 456), lcolor=OR)
-    d.arrow([(599, 630), (599, y + h)], color=OR, width=2.5, label='TRACECLK + TRACED0–3', lpos=(605, 600),
+    d.arrow([(599, 640), (599, y + h)], color=OR, width=2.5, label='TRACECLK + TRACED0–3', lpos=(605, 612),
             lanchor='start', lcolor=OR)
-    d.arrow([(1050, y + h), (1050, 712), (724, 712)], color=PU, width=2, label='SWD', lpos=(1056, 620),
+    d.arrow([(869, y + h), (869, 640)], color=PU, width=2, both=True, label='UART', lpos=(875, 612),
             lanchor='start', lcolor=PU)
-    d.arrow([(859, 630), (859, 580), (690, 580), (690, y + h)], color=TE, label='PPS', lpos=(780, 574), lcolor=TE)
-    d.arrow([(114, y + h), (114, 590), (449, 590), (449, 486)], color=TE, dash=True,
-            label='щупы анализатора', lpos=(250, 584), lcolor=TE)
-    d.line_legend(24, 770, [(G3, False, 3, 'USB3 SS'), (G2, False, 1.8, 'USB2'), (BL, False, 2.5, 'HSPI'),
-                            (OR, False, 2.5, 'трасса'), (PU, False, 2, 'SWD'), (TE, False, 1.8, 'PPS'),
+    d.arrow([(1069, y + 84), (1069, 590), (690, 590), (690, y + h)], color=TE, label='PPS', lpos=(1000, 584), lcolor=TE)
+    d.arrow([(114, y + h), (114, 600), (449, 600), (449, 486)], color=TE, dash=True,
+            label='щупы анализатора', lpos=(250, 594), lcolor=TE)
+    d.line_legend(24, 782, [(G3, False, 3, 'USB3 SS'), (G2, False, 1.8, 'USB2'), (BL, False, 2.5, 'HSPI'),
+                            (OR, False, 2.5, 'трасса'), (PU, False, 2, 'UART'), (TE, False, 1.8, 'PPS'),
                             (TE, True, 1.8, 'щупы')])
     d.save('bench.svg', DOC_IMG)
-
 
 if __name__ == '__main__':
     system(); frontend(); gateware(); fsm(); events(); bench()

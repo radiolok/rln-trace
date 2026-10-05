@@ -5,4 +5,4 @@
 
 | Документ | Что внутри |
 |---|---|
-| [bench.md](bench.md) | Отладочный стенд: Tang Nano 20K + CH569, ПК, USB-коммутатор, SLogic16U3, цель STM32 |
+| [bench.md](bench.md) | Отладочный стенд: Tang Nano 20K + CH569, ПК, USB-коммутатор, SLogic16U3, цель STM32F4-Discovery, FT2232H |
