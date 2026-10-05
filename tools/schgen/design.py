@@ -307,14 +307,15 @@ T.frame(12.7, 180.34, 406.4, 254.0, 'Target power (pins 11/13), measurement')
 
 T.place('Conn_02x10_Odd_Even', 'J2', 'MIPI20', 63.5, 60.96,
         fp='Connector_PinHeader_1.27mm:PinHeader_2x10_P1.27mm_Vertical_SMD',
-        nets={'1': 'VREF_T', '3': 'GND', '5': 'GND', '7': 'GND', '9': 'GND', '11': 'P11_13',
+        nets={'1': 'VREF_T', '3': 'GND', '5': 'GND', '7': 'NC', '9': 'GND', '11': 'P11_13',
               '13': 'P11_13', '15': 'GND', '17': 'GND', '19': 'GND',
               '2': 'T_SWDIO', '4': 'T_SWCLK', '6': 'T_TDO', '8': 'T_TDI', '10': 'T_NRST',
               '12': 'T_TRCCLK', '14': 'T_D0', '16': 'T_D1', '18': 'T_D2', '20': 'T_D3'},
         pwr_stub=2.54)
 T.note(20.32, 86.36, 'Pin 1 VREF, 2 TMS/SWDIO, 4 TCK/SWCLK, 6 TDO/SWO, 8 TDI, 10 nRESET,\n'
        '12 TRC_CLK, 14/16/18/20 TRC_DATA[0..3], 9 GNDDetect = GND on probe,\n'
-       '11/13 GND or TgtPwr+Cap (JP1), 7 key/GND.', 1.27)
+       '11/13 GND or TgtPwr+Cap (JP1), 7 = KEY: remove pin 7 from the header\n'
+       '(keyed Cortex Debug+ETM cables have hole 7 plugged). Shrouded keyed header.', 1.27)
 for k, nets in enumerate([['T_SWDIO', 'T_SWCLK', 'T_TDO', 'T_TDI'],
                           ['T_NRST', 'T_TRCCLK', 'T_D0', 'T_D1'],
                           ['T_D2', 'T_D3', 'VREF_T', 'NC']]):
