@@ -18,3 +18,7 @@
 	path = au/hydrausb3_fw
 	url = https://github.com/hydrausb3/hydrausb3_fw
 	shallow = true
+[submodule "au/pico-usb-blaster"]
+	path = au/pico-usb-blaster
+	url = https://github.com/thisiseth/pico-usb-blaster
+	shallow = true

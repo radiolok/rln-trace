@@ -160,8 +160,14 @@ CH569 разбирает CMSIS-DAP v2 (протокольное ядро [free-d
   FPGA Altera/Intel, Xilinx, Lattice, Gowin (SVF, `pld`, openFPGALoader), boundary scan.
 - **Ускорение транзакций SWD/JTAG-DP** строится поверх движка: чтение и запись DP/AP целиком в ПЛИС,
   без обмена по USB на каждый бит.
-- **Quartus Programmer** напрямую не поддерживается (он работает только с USB-Blaster): Quartus выгружает
-  SVF/JAM, прошивка — через OpenOCD или openFPGALoader.
+- **Режим USB-Blaster для Quartus** (следующий этап). Quartus Programmer работает только с USB-Blaster,
+  поэтому зонд по команде переключается в отдельный режим: заново перечисляется на USB как
+  USB-Blaster (FT245, VID:PID 09fb:6001, full-speed, 64-байтные пакеты) и выполняет его протокол —
+  побитовый режим и shift-режим — на том же сдвиговом движке. Образец — [`au/pico-usb-blaster`](../au/pico-usb-blaster)
+  (MIT, tinyUSB). Только JTAG: режимы AS/PS требуют линий nCONFIG, nCE, nCS, CONF_DONE, nSTATUS,
+  которых на MIPI20 нет. В прошивке для публичных сборок VID:PID Altera — отдельный вопрос, режим
+  можно оставить опцией сборки. До его готовности: Quartus выгружает SVF/JAM, прошивка — через
+  OpenOCD или openFPGALoader.
 - **Следующий этап — Spy-Bi-Wire для MSP430:** отдельный режим движка и драйвер для mspdebug (OpenOCD
   MSP430 не поддерживает). Новых линий не нужно: пассивный переходник подаёт SWCLK на вывод TEST
   (SBWTCK), а SWDIO — на RST (SBWTDIO). Все MSP430 с выводом TEST умеют SBW; старые без TEST имеют
