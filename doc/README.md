@@ -6,3 +6,4 @@
 | Документ | Что внутри |
 |---|---|
 | [bench.md](bench.md) | Отладочный стенд: Tang Nano 20K + CH569, ПК, USB-коммутатор, SLogic16U3, цель STM32F4-Discovery, FT2232H |
+| [ch32h417-uhsif.md](ch32h417-uhsif.md) | CH32H417 UHSIF: протокол шины со стороны ПЛИС, состав `libUHSIF.a`, план разбора |
