@@ -6,4 +6,5 @@
 | Документ | Что внутри |
 |---|---|
 | [bench.md](bench.md) | Отладочный стенд: Tang Nano 20K + CH569, ПК, USB-коммутатор, SLogic16U3, цель STM32F4-Discovery, FT2232H |
-| [ch32h417-uhsif.md](ch32h417-uhsif.md) | CH32H417 UHSIF: протокол шины со стороны ПЛИС, состав `libUHSIF.a`, план разбора |
+| [ch32h417-uhsif.md](ch32h417-uhsif.md) | CH32H417 UHSIF: протокол шины со стороны ПЛИС, состав `libUHSIF.a`, карта регистров и дескрипторов по трассам spike |
+| [uhsif-re-method.md](uhsif-re-method.md) | Методика вскрытия `libUHSIF.a`: перелинковка, Ghidra, опознание опкодов `xw2p2`, spike на Unicorn, грабли |
