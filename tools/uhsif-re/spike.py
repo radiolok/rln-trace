@@ -50,23 +50,27 @@ class Spike:
         for s in f.iter_sections():
             if s["sh_type"] == "SHT_PROGBITS" and s["sh_addr"]:
                 uc.mem_write(s["sh_addr"], s.data())
-        self.sym, self.func_at = {}, []
+        self.sym, funcs = {}, []
         for s in f.get_section_by_name(".symtab").iter_symbols():
             if s.name == ".LANCHOR0":
                 self.sym["rodata"] = s["st_value"]                       # GPIO_InitTypeDef pool
             elif s.name and not s.name.startswith((".L", "$")):
                 self.sym[s.name] = s["st_value"]
+                if s["st_info"]["type"] == "STT_FUNC" and s["st_size"]:
+                    funcs.append((s["st_value"], s["st_size"], s.name))
         self.stubs = {a: n for n, a in self.sym.items() if STUB <= a < STUB + 0x1000}
-        self.func_at = sorted((a, n) for n, a in self.sym.items() if 0x10000 <= a < 0x10FC8)
-        self.patch = self.find_unsupported(f)
+        self.func_at = sorted((a, n) for a, _, n in funcs)
+        self.dscr = {k: next((self.sym[n] for n in names if n in self.sym), None)
+                     for k, names in (("IN", ("SOCKET_DSCR_RD", "uhsif_dscr_in")),
+                                      ("OUT", ("SOCKET_DSCR_WR", "uhsif_dscr_out")))}
+        text = f.get_section_by_name(".text")
+        self.patch = self.find_unsupported(text, funcs)
         # Hooks run before the instruction; never touch PC from a hook.  Unsupported instructions
-        # become NOPs of the same size, stub slots become real returns.
+        # become NOPs of the same size, stub slots become real returns, mret becomes ret.
         for a, (_, n) in self.patch.items():
             uc.mem_write(a, b"\x01\x00" if n == 2 else (0x13).to_bytes(4, "little"))
-        text = f.get_section_by_name(".text")
-        for off in range(0, text["sh_size"] - 3, 2):                    # mret -> ret: stay in M-mode
-            if text.data()[off:off + 4] == (0x30200073).to_bytes(4, "little"):
-                uc.mem_write(text["sh_addr"] + off, (0x00008067).to_bytes(4, "little"))
+        for a in self.find_mret(text, funcs):
+            uc.mem_write(a, (0x00008067).to_bytes(4, "little"))
         for a, n in self.stubs.items():
             back = 5 if n.startswith("__riscv_save_") else 1          # jal t0 / ra
             uc.mem_write(a, (0x67 | back << 15).to_bytes(4, "little"))   # jalr x0, 0(t0|ra)
@@ -99,24 +103,32 @@ class Spike:
         self.log.append(text)
 
     # --- instructions Unicorn does not know ---
-    def find_unsupported(self, f):
-        sec = f.get_section_by_name(".text")
-        t, base = sec.data(), sec["sh_addr"]
-        end = min(a for n, a in self.sym.items() if n.startswith("Uhsif")) - base
-        out, i = {}, 0
-        while i < end:
-            h = int.from_bytes(t[i:i + 2], "little")
-            if h & 3 == 3:
-                ins = int.from_bytes(t[i:i + 4], "little")
+    @staticmethod
+    def walk(text, funcs):
+        """(address, raw, size) of every instruction inside a function symbol."""
+        t, base = text.data(), text["sh_addr"]
+        for start, size, _ in funcs:
+            i, end = start - base, start - base + size
+            while i < end:
+                h = int.from_bytes(t[i:i + 2], "little")
+                n = 4 if h & 3 == 3 else 2
+                yield base + i, int.from_bytes(t[i:i + n], "little"), n
+                i += n
+
+    def find_mret(self, text, funcs):
+        return [a for a, ins, n in self.walk(text, funcs) if n == 4 and ins == 0x30200073]
+
+    def find_unsupported(self, text, funcs):
+        out = {}
+        for a, ins, n in self.walk(text, funcs):
+            if n == 4:
                 op, f3, f7 = ins & 0x7F, (ins >> 12) & 7, ins >> 25
                 if (op == 0x33 and f7 in (0x10, 0x04)) or (op == 0x13 and f3 in (1, 5) and f7 in (0x14, 0x24, 0x34)):
-                    out[base + i] = (ins, 4)
-                i += 4
-            else:
-                if h & 3 == 0 and (h >> 13) in (1, 5):
-                    out[base + i] = (h, 2)
-                i += 2
+                    out[a] = (ins, 4)
+            elif ins & 3 == 0 and (ins >> 13) in (1, 5):
+                out[a] = (ins, 2)
         return out
+
 
     def on_patch(self, uc, pc, size, _):
         ins, n = self.patch[pc]
@@ -193,14 +205,23 @@ class Spike:
             v = self.rd(addr, size)
             self.emit(f"  R{size} {region(addr):14} => 0x{v:08x}   @{self.where(pc)}")
 
-    def dump_dscr(self, socks):
-        """SOCKET_DSCR_RD/WR are 32 descriptors x 32 bytes each, indexed by line*8 + buf."""
-        for name in ("SOCKET_DSCR_RD", "SOCKET_DSCR_WR"):
-            base = self.sym[name]
-            for k in socks:
-                words = [self.rd(base + 32 * k + 4 * j, 4) for j in range(8)]
+    def dscr_name(self, addr):
+        """'IN[k]' / 'OUT[k]' for a descriptor address, else None."""
+        for k, base in self.dscr.items():
+            if base is not None and base <= addr < base + 32 * 32 and (addr - base) % 32 == 0:
+                return f"{k}[{(addr - base) // 32}]"
+        return None
+
+    def dump_dscr(self, socks=range(32)):
+        """32 descriptors x 32 bytes per direction, indexed by line*8 + buf; word 2 (own address >> 5)
+        is printed as 'self' so that dumps of different builds compare equal."""
+        for k, base in self.dscr.items():
+            for i in socks:
+                a = base + 32 * i
+                words = [self.rd(a + 4 * j, 4) for j in range(8)]
                 if any(words):
-                    self.emit(f"  {name}[{k:2}] @0x{base + 32 * k:08x}: " + " ".join(f"{w:08x}" for w in words))
+                    txt = ["self" if j == 2 and w == a >> 5 else f"{w:08x}" for j, w in enumerate(words)]
+                    self.emit(f"  DSCR_{k}[{i:2}]: " + " ".join(txt))
 
     # --- run ---
     def call(self, name, *args, preset=None):
@@ -221,36 +242,47 @@ class Spike:
         return ret
 
 
-def main():
-    elf, mode = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "fpga")
-    s = Spike(elf)
-    m = {"fpga": 0, "soc": 1, "master": 2}[mode]
-    TX, RX = 0x20008000, 0x2000A000             # stand-ins for USBSS_EP1_Tx_Buf / Rx_Buf
-    s.emit(f"# libUHSIF spike, mode={mode}; patched {len(s.patch)} insns")
+TX, RX = 0x20008000, 0x2000A000                 # stand-ins for USBSS_EP1_Tx_Buf / Rx_Buf
+
+
+def scenario(s, m, port_rm=2, clk_rm=1, width=3, lines=((0, 0, 8, TX, 0), (1, 1, 8, RX, 0))):
+    """The WCH example flow, then transfers, every interrupt case, register access, shutdown."""
     s.call("UHSIF_Get_Ver")
-    s.call("UHSIF_GPIO_Init", m, 2, 1, 4 if m == 2 else 0, 3)
+    s.call("UHSIF_GPIO_Init", m, port_rm, clk_rm, 4 if m == 2 else 0, width)
     s.call("UHSIF_Cfg")
-    s.call("UHSIF_Line_Cfg", 0, 0, 8, TX, 0)    # line 0: IN  (FPGA -> MCU)
-    s.call("UHSIF_Line_Cfg", 1, 1, 8, RX, 0)    # line 1: OUT (MCU -> FPGA)
-    s.dump_dscr(range(32))
+    for cfg in lines:
+        s.call("UHSIF_Line_Cfg", *cfg)
+    s.dump_dscr()
     s.call("UHSIF_Start", 1)
-    s.call("UHSIF_Trans_Cfg", 1, 0, 1024)
-    s.call("UHSIF_Trans_Cfg", 1, 3, 100)
-    s.call("UHSIF_Trans_Cfg", 0, 2, 0)          # IN: re-arm reception of buffer 2, size ignored
-    s.dump_dscr(range(32))
+    for line, dir_, count, _, _ in lines:
+        for rnd in range(2):                     # second round takes the re-arm path
+            for buf in range(count):
+                s.call("UHSIF_Trans_Cfg", line, buf, (100 + 37 * buf) if dir_ else 0)
+        s.call("UHSIF_Trans_Cfg", line, count, 0)   # buffer out of range
+    s.call("UHSIF_Trans_Cfg", 3 if len(lines) < 4 else 0, 0, 0)   # line not enabled
+    s.dump_dscr()
     # interrupt: flag of line n in UHSIF+0x14 bit 11+n, current socket in UHSIF+0xfc+4n,
     # socket status in 0x40039000 + sock*0x40 + 0x10
-    for line in (0, 1):
-        for buf in (0, 5):
+    for line, _, count, _, _ in lines:
+        for buf in sorted({0, count - 1}):
             sock = buf * 4 + line
-            for st in (0x1, 0x40, 0x80, 0x100):
+            for st in (0x0, 0x1, 0x40, 0x41, 0x80, 0x81, 0x100, 0x101, 0x1C1):
                 s.call("UHSIF_IRQHandler", preset={0x40038014: 1 << (11 + line),
                                                    0x400380FC + 4 * line: sock,
                                                    0x40039010 + sock * 0x40: st,
-                                                   0x40039008 + sock * 0x40: 0x1234})
+                                                   0x40039008 + sock * 0x40: 0x1234 + sock})
+    s.call("UHSIF_IRQHandler", preset={0x40038014: 0, 0x40039010: 0x40})   # no line flag
     s.call("UHSIF_Reg_Cfg", m, 5, 0x12345678)
     s.call("UHSIF_Reg_Cfg", m, 76, 0)
+    s.call("UHSIF_Reg_Cfg", 3, 0, 0)
     s.call("UHSIF_Start", 0)
+
+
+def main():
+    elf, mode = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "fpga")
+    s = Spike(elf)
+    s.emit(f"# libUHSIF spike, mode={mode}; patched {len(s.patch)} insns")
+    scenario(s, {"fpga": 0, "soc": 1, "master": 2}[mode])
     print("\n".join(s.log))
 
 

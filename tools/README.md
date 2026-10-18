@@ -3,7 +3,7 @@
 | Папка | Что |
 |---|---|
 | [`schgen/`](schgen/) | Генератор схемы зонда B для KiCad 9, проверка связности, PNG-превью |
-| [`uhsif-re/`](uhsif-re/) | Разбор `libUHSIF.a` (CH32H417): перелинковка, дизассемблер с Zb*/XW, spike на Unicorn с журналом MMIO. Методика — [`doc/uhsif-re-method.md`](../doc/uhsif-re-method.md) |
+| [`uhsif-re/`](uhsif-re/) | Разбор `libUHSIF.a` (CH32H417): перелинковка, дизассемблер с Zb*/XW, spike на Unicorn с журналом MMIO, сверка открытого драйвера `fw/uhsif` с библиотекой (`compare.py`). Методика — [`doc/uhsif-re-method.md`](../doc/uhsif-re-method.md) |
 | [`diagrams/`](diagrams/) | Структурные схемы для документации (SVG в `hw/img/`): `python3 tools/diagrams/make_diagrams.py` |
 
 Запуск генератора (нужны Python 3 и Pillow, а также библиотеки символов KiCad 5 —

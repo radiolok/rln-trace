@@ -12,3 +12,9 @@
 
 Основа — BSP и примеры [`au/hydrausb3_fw`](../au/hydrausb3_fw), протокольное ядро CMSIS-DAP —
 [`au/free-dap`](../au/free-dap).
+
+## Состав
+
+| Папка | Что |
+|---|---|
+| [`uhsif/`](uhsif/) | Открытый драйвер UHSIF для CH32H417 — второго кандидата на USB3-мост, замена `libUHSIF.a` |
