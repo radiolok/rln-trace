@@ -23,11 +23,16 @@ void GPIO_Init(GPIO_TypeDef *GPIOx, GPIO_InitTypeDef *GPIO_InitStruct);
 void RCC_HBPeriphClockCmd(uint32_t periph, FunctionalState state);
 void RCC_HB2PeriphClockCmd(uint32_t periph, FunctionalState state);
 void RCC_HBPeriphResetCmd(uint32_t periph, FunctionalState state);
+#ifndef UHSIF_IRQ_ATTR
 #define UHSIF_IRQ_ATTR __attribute__((interrupt("machine")))
+#endif
 #else
 #include <string.h>
 #include "ch32h417.h"
+/* WCH GCC: hardware-stacked fast interrupt; other compilers: -DUHSIF_IRQ_ATTR=... */
+#ifndef UHSIF_IRQ_ATTR
 #define UHSIF_IRQ_ATTR __attribute__((interrupt("WCH-Interrupt-fast")))
+#endif
 #endif
 
 UHSIF_Para_t UHSIF_Para;

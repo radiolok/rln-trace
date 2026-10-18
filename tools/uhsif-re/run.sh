@@ -3,13 +3,15 @@
 # then build the open driver (fw/uhsif) and check it against the library in the spike.
 # Output goes to build/ (git-ignored).  Needs: curl, binutils (ar), Python 3 venv with
 # pyelftools capstone unicorn ziglang; Ghidra in $GHIDRA (optional, skipped if unset).
+# WCH_REF selects the openwch/ch32h417 revision (default: main).
 set -eu
 cd "$(dirname "$0")"
 PY=${PY:-python3}
 B=build
 mkdir -p $B/lib
-URL=https://raw.githubusercontent.com/openwch/ch32h417/main/EVT/EXAM/UHSIF/UHSIF_SLAVE/Common/libUHSIF.a
-[ -f $B/lib/libUHSIF.a ] || curl -sSLf --retry 3 -o $B/lib/libUHSIF.a $URL
+URL=https://raw.githubusercontent.com/openwch/ch32h417/${WCH_REF:-main}/EVT/EXAM/UHSIF/UHSIF_SLAVE/Common/libUHSIF.a
+[ -f $B/lib/libUHSIF.a ] || curl -sSLf --retry 5 --retry-all-errors -o $B/lib/libUHSIF.a $URL
+sha256sum $B/lib/libUHSIF.a
 (cd $B/lib && ar x libUHSIF.a)
 
 # every external symbol -> trap address 0x00F00000 + 16*i
@@ -34,7 +36,9 @@ done
 DS=$(nm $O/uhsif.o $O/uhsif_tables.o | awk '$1=="U"{print $2}' | sort -u | grep -vx uhsif_tables \
     | awk '{printf " --defsym=%s=0x%x", $1, 15728640 + 16*(NR-1)}')
 $PY -m ziglang ld.lld -m elf32lriscv --no-relax -T link.ld $DS -e UHSIF_Cfg $O/uhsif.o $O/uhsif_tables.o -o $O/uhsif_open.elf
-$PY -I compare.py $B/uhsif.elf $O/uhsif_open.elf | tee $B/compare.txt
+rc=0; $PY -I compare.py $B/uhsif.elf $O/uhsif_open.elf > $B/compare.txt || rc=$?
+cat $B/compare.txt
+[ $rc -eq 0 ] || exit $rc
 
 if [ -n "${GHIDRA:-}" ]; then
     mkdir -p $B/ghidra

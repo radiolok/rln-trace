@@ -1,0 +1,99 @@
+name: uhsif
+
+# Open UHSIF driver (fw/uhsif): builds with stock RISC-V toolchains, against the WCH StdPeriph
+# headers, and stays access-for-access equal to libUHSIF.a in the Unicorn spike.
+
+on:
+  push:
+    paths:
+      - 'fw/uhsif/**'
+      - 'tools/uhsif-re/**'
+      - '.github/workflows/uhsif.yml'
+  pull_request:
+    paths:
+      - 'fw/uhsif/**'
+      - 'tools/uhsif-re/**'
+      - '.github/workflows/uhsif.yml'
+  workflow_dispatch:
+    inputs:
+      wch_ref:
+        description: 'openwch/ch32h417 revision (try "main" to check a newer libUHSIF.a)'
+        required: false
+
+env:
+  # libUHSIF.a and StdPeriph headers are taken from this revision of openwch/ch32h417
+  WCH_REF: ${{ inputs.wch_ref || '6d1e469a5e9874a67613721ad7fd47b9de96654f' }}
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc rv32imac
+            cc: riscv64-unknown-elf-gcc
+            flags: -march=rv32imac_zicsr_zifencei -mabi=ilp32
+          - name: gcc rv32imac + Zba/Zbb/Zbs
+            cc: riscv64-unknown-elf-gcc
+            flags: -march=rv32imac_zicsr_zifencei_zba_zbb_zbs -mabi=ilp32
+          - name: clang rv32imac
+            cc: clang
+            flags: --target=riscv32-unknown-elf -march=rv32imac_zicsr_zifencei -mabi=ilp32
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf clang
+
+      - name: Fetch WCH StdPeriph headers
+        run: |
+          git clone -q --filter=blob:none --no-checkout https://github.com/openwch/ch32h417.git wch
+          git -C wch sparse-checkout set --no-cone /EVT/EXAM/SRC/Core/ /EVT/EXAM/SRC/Peripheral/inc/ \
+              /EVT/EXAM/UHSIF/UHSIF_SLAVE/V5F/User/ /EVT/EXAM/UHSIF/UHSIF_SLAVE/Common/Debug/
+          git -C wch checkout -q "$WCH_REF"
+
+      - name: Compile
+        run: |
+          W=wch/EVT/EXAM
+          libc=/usr/lib/picolibc/riscv64-unknown-elf/include   # compile only: headers are enough
+          common="${{ matrix.flags }} -Os -ffunction-sections -fdata-sections -Wall -Wextra -Werror -Ifw/uhsif"
+          set -x
+          # test build: no StdPeriph, as used by the spike
+          ${{ matrix.cc }} $common -ffreestanding -DUHSIF_NO_STDPERIPH -c fw/uhsif/uhsif.c -o uhsif_test.o
+          # firmware build against the WCH headers; stock compilers lack "WCH-Interrupt-fast"
+          ${{ matrix.cc }} $common -DUHSIF_IRQ_ATTR='__attribute__((interrupt("machine")))' \
+              -isystem $libc -isystem $W/SRC/Core -isystem $W/SRC/Peripheral/inc \
+              -isystem $W/UHSIF/UHSIF_SLAVE/V5F/User -isystem $W/UHSIF/UHSIF_SLAVE/Common/Debug \
+              -c fw/uhsif/uhsif.c -o uhsif.o
+          riscv64-unknown-elf-size uhsif_test.o uhsif.o
+
+  spike:
+    name: spike vs libUHSIF.a
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/uhsif-re/requirements.txt
+
+      - name: Install Python tools
+        run: pip install -r tools/uhsif-re/requirements.txt
+
+      - name: Relink, trace, build open driver, compare
+        run: PY=python tools/uhsif-re/run.sh
+
+      # only our comparison report: traces and tables are WCH data
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uhsif-compare
+          path: tools/uhsif-re/build/compare.txt
+          if-no-files-found: ignore

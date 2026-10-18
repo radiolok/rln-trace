@@ -32,6 +32,17 @@ python3 -I tools/uhsif-re/extract_tables.py lib.o > uhsif_tables.c
 
 На железе драйвер ещё не проверен.
 
+CI ([`.github/workflows/uhsif.yml`](../../.github/workflows/uhsif.yml)) на каждое изменение
+`fw/uhsif` и `tools/uhsif-re`:
+
+- собирает драйвер штатными тулчейнами — GCC `rv32imac`, GCC `rv32imac` + Zba/Zbb/Zbs, clang — в
+  двух вариантах: тестовом (`-DUHSIF_NO_STDPERIPH`) и против заголовков StdPeriph WCH, с `-Werror`;
+- прогоняет `run.sh`: скачивает `libUHSIF.a`, собирает драйвер и сравнивает его с библиотекой в
+  spike. Любое расхождение роняет сборку.
+
+Ревизия openwch/ch32h417 закреплена в workflow (`WCH_REF`). Ручной запуск с `wch_ref: main`
+проверяет, не поменяла ли WCH библиотеку.
+
 ## Отличия от библиотеки
 
 Только на неверных аргументах:
