@@ -236,6 +236,7 @@ def main():
     s.call("UHSIF_Start", 1)
     s.call("UHSIF_Trans_Cfg", 1, 0, 1024)
     s.call("UHSIF_Trans_Cfg", 1, 3, 100)
+    s.call("UHSIF_Trans_Cfg", 0, 2, 0)          # IN: re-arm reception of buffer 2, size ignored
     s.dump_dscr(range(32))
     # interrupt: flag of line n in UHSIF+0x14 bit 11+n, current socket in UHSIF+0xfc+4n,
     # socket status in 0x40039000 + sock*0x40 + 0x10

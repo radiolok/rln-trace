@@ -16,7 +16,10 @@ DS=$(nm $B/lib/lib.o | awk '$1=="U"{print $2}' | awk '{printf " --defsym=%s=0x%x
 $PY -m ziglang ld.lld -m elf32lriscv --no-relax -T link.ld $DS -e UHSIF_Cfg $B/lib/lib.o -o $B/uhsif.elf -Map $B/uhsif.map
 
 $PY -I disasm.py $B/uhsif.elf > $B/uhsif.dis
-for m in fpga soc master; do $PY -I spike.py $B/uhsif.elf $m > $B/trace_$m.txt; done
+for m in fpga soc master; do
+    $PY -I spike.py $B/uhsif.elf $m > $B/trace_$m.txt
+    $PY -I pinmap.py $B/uhsif.elf $m > $B/pinmap_$m.md
+done
 
 if [ -n "${GHIDRA:-}" ]; then
     mkdir -p $B/ghidra
