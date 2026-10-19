@@ -22,3 +22,7 @@
 	path = au/pico-usb-blaster
 	url = https://github.com/thisiseth/pico-usb-blaster
 	shallow = true
+[submodule "au/ch32h417"]
+	path = au/ch32h417
+	url = https://github.com/openwch/ch32h417
+	shallow = true
