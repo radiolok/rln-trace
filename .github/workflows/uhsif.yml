@@ -7,22 +7,25 @@ on:
   push:
     paths:
       - 'fw/uhsif/**'
+      - 'au/ch32h417'
       - 'tools/uhsif-re/**'
       - '.github/workflows/uhsif.yml'
+      - '.github/actions/wch-sdk/**'
   pull_request:
     paths:
       - 'fw/uhsif/**'
+      - 'au/ch32h417'
       - 'tools/uhsif-re/**'
       - '.github/workflows/uhsif.yml'
+      - '.github/actions/wch-sdk/**'
   workflow_dispatch:
     inputs:
       wch_ref:
-        description: 'openwch/ch32h417 revision (try "main" to check a newer libUHSIF.a)'
+        description: 'openwch/ch32h417 revision instead of the au/ch32h417 submodule (try "main")'
         required: false
 
-env:
-  # libUHSIF.a and StdPeriph headers are taken from this revision of openwch/ch32h417
-  WCH_REF: ${{ inputs.wch_ref || '6d1e469a5e9874a67613721ad7fd47b9de96654f' }}
+# libUHSIF.a and the StdPeriph headers come from the au/ch32h417 submodule (its pinned commit);
+# a manual run with wch_ref moves the submodule to that revision first.
 
 jobs:
   build:
@@ -49,16 +52,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf clang
 
-      - name: Fetch WCH StdPeriph headers
-        run: |
-          git clone -q --filter=blob:none --no-checkout https://github.com/openwch/ch32h417.git wch
-          git -C wch sparse-checkout set --no-cone /EVT/EXAM/SRC/Core/ /EVT/EXAM/SRC/Peripheral/inc/ \
-              /EVT/EXAM/UHSIF/UHSIF_SLAVE/V5F/User/ /EVT/EXAM/UHSIF/UHSIF_SLAVE/Common/Debug/
-          git -C wch checkout -q "$WCH_REF"
+      - name: WCH SDK (au/ch32h417)
+        uses: ./.github/actions/wch-sdk
+        with:
+          ref: ${{ inputs.wch_ref }}
 
       - name: Compile
         run: |
-          W=wch/EVT/EXAM
+          W=au/ch32h417/EVT/EXAM
           libc=/usr/lib/picolibc/riscv64-unknown-elf/include   # compile only: headers are enough
           common="${{ matrix.flags }} -Os -ffunction-sections -fdata-sections -Wall -Wextra -Werror -Ifw/uhsif"
           set -x
@@ -76,6 +77,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: WCH SDK (au/ch32h417)
+        uses: ./.github/actions/wch-sdk
+        with:
+          ref: ${{ inputs.wch_ref }}
 
       - uses: actions/setup-python@v5
         with:

@@ -3,14 +3,19 @@
 # then build the open driver (fw/uhsif) and check it against the library in the spike.
 # Output goes to build/ (git-ignored).  Needs: curl, binutils (ar), Python 3 venv with
 # pyelftools capstone unicorn ziglang; Ghidra in $GHIDRA (optional, skipped if unset).
-# WCH_REF selects the openwch/ch32h417 revision (default: main).
+# libUHSIF.a comes from the au/ch32h417 submodule; WCH_REF=<rev> downloads that revision instead.
 set -eu
 cd "$(dirname "$0")"
 PY=${PY:-python3}
 B=build
 mkdir -p $B/lib
+SUB=../../au/ch32h417/EVT/EXAM/UHSIF/UHSIF_SLAVE/Common/libUHSIF.a
 URL=https://raw.githubusercontent.com/openwch/ch32h417/${WCH_REF:-main}/EVT/EXAM/UHSIF/UHSIF_SLAVE/Common/libUHSIF.a
-[ -f $B/lib/libUHSIF.a ] || curl -sSLf --retry 5 --retry-all-errors -o $B/lib/libUHSIF.a $URL
+if [ -z "${WCH_REF:-}" ] && [ -f $SUB ]; then
+    cp $SUB $B/lib/libUHSIF.a                  # submodule au/ch32h417
+elif [ ! -f $B/lib/libUHSIF.a ]; then
+    curl -sSLf --retry 5 --retry-all-errors -o $B/lib/libUHSIF.a $URL
+fi
 sha256sum $B/lib/libUHSIF.a
 (cd $B/lib && ar x libUHSIF.a)
 

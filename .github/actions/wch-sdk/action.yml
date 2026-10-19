@@ -1,0 +1,20 @@
+name: WCH SDK
+description: Fetch only the au/ch32h417 submodule (shallow), optionally at another revision
+inputs:
+  ref:
+    description: openwch/ch32h417 revision; empty = the commit pinned in the superproject
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        REF: ${{ inputs.ref }}
+      run: |
+        git submodule update --init --depth 1 au/ch32h417
+        if [ -n "$REF" ]; then
+          git -C au/ch32h417 fetch -q --depth 1 origin "$REF"
+          git -C au/ch32h417 checkout -q FETCH_HEAD
+        fi
+        echo "openwch/ch32h417 at $(git -C au/ch32h417 rev-parse HEAD)"
