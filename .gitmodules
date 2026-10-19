@@ -26,3 +26,7 @@
 	path = au/ch32h417
 	url = https://github.com/openwch/ch32h417
 	shallow = true
+[submodule "au/nanoCH32H417"]
+	path = au/nanoCH32H417
+	url = https://github.com/wuxx/nanoCH32H417
+	shallow = true
