@@ -7,6 +7,18 @@
 
 #include "check.h"
 
+/* PRBS31 одинакова во всех блоках: ожидаемые слова считаются один раз */
+static uint32_t prbs_tab[BLOCK_MAX / 4];
+static int prbs_ready;
+
+static void prbs_init(void)
+{
+	uint32_t s = STREAM_PRBS31_SEED;
+
+	for(uint32_t k = STREAM_HDR_WORDS; k < BLOCK_MAX / 4; k++)
+		prbs_tab[k] = stream_prbs31(&s);
+	prbs_ready = 1;
+}
 
 static void lose_sync(struct parser *p)
 {
@@ -20,9 +32,16 @@ static void header_done(struct parser *p)
 {
 	uint32_t len = p->hdr[2], seq = p->hdr[1];
 
-	if(len < 512 || len > BLOCK_MAX || len % 4 || p->hdr[3] != 0) {
+	if(len < 512 || len > BLOCK_MAX || len % 4 ||
+	   (p->hdr[3] != STREAM_KIND_WORD && p->hdr[3] != STREAM_KIND_PRBS31)) {
 		lose_sync(p);
 		return;
+	}
+	p->kind = p->hdr[3];
+	if(p->kind == STREAM_KIND_PRBS31) {
+		p->prbs_blocks++;
+		if(!prbs_ready)
+			prbs_init();
 	}
 	p->words = len / 4;
 	p->block_len = len;
@@ -69,7 +88,7 @@ void check_parse(struct parser *p, const uint8_t *buf, size_t len)
 				header_done(p);
 			continue;
 		}
-		if(w != stream_word(p->k)) {
+		if(w != (p->kind == STREAM_KIND_PRBS31 ? prbs_tab[p->k] : stream_word(p->k))) {
 			p->bad_words++;
 			p->bad = 1;
 		}

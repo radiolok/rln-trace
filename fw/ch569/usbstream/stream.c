@@ -14,7 +14,7 @@ static void stream_hdr(uint8_t *buf, uint32_t len)
 	w[0] = STREAM_MAGIC;
 	w[1] = stream_seq++;
 	w[2] = len;
-	w[3] = 0;
+	w[3] = STREAM_KIND_WORD;
 }
 
 void stream_start(uint8_t *buf, uint32_t len)

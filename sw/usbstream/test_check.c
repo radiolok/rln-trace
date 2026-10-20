@@ -14,19 +14,25 @@ static int failed;
 
 #define EXPECT(cond) do { if(!(cond)) { printf("  %s:%d: %s\n", __FILE__, __LINE__, #cond); failed = 1; } } while(0)
 
-/* поток из n блоков по len байт с номерами first.. */
-static size_t gen(uint8_t *buf, uint32_t len, uint32_t first, int n)
+/* поток из n блоков по len байт с номерами first.. и нагрузкой kind */
+static size_t gen_kind(uint8_t *buf, uint32_t len, uint32_t first, int n, uint32_t kind)
 {
 	for(int b = 0; b < n; b++) {
 		uint32_t *w = (uint32_t *)(buf + (size_t)b * len);
+		uint32_t s = STREAM_PRBS31_SEED;
 		w[0] = STREAM_MAGIC;
 		w[1] = first + b;
 		w[2] = len;
-		w[3] = 0;
+		w[3] = kind;
 		for(uint32_t k = STREAM_HDR_WORDS; k < len / 4; k++)
-			w[k] = stream_word(k);
+			w[k] = kind == STREAM_KIND_PRBS31 ? stream_prbs31(&s) : stream_word(k);
 	}
 	return (size_t)n * len;
+}
+
+static size_t gen(uint8_t *buf, uint32_t len, uint32_t first, int n)
+{
+	return gen_kind(buf, len, first, n, STREAM_KIND_WORD);
 }
 
 /* разбор кусками: chunk == 0 — случайные длины, кратные 4 */
@@ -108,6 +114,33 @@ int main(void)
 	memcpy(buf + 3 * 4096 + 1024, tmp + 3 * 4096 + 2048, len - 3 * 4096 - 2048);
 	p = run(buf, len - 1024, 0);
 	EXPECT(check_errors(&p) > 0 && p.blocks >= N - 2);
+
+	printf("PRBS31: чистый поток, порча, вперемешку с обычной нагрузкой\n");
+	len = gen_kind(buf, 4096, 0, N, STREAM_KIND_PRBS31);
+	p = run(buf, len, 0);
+	EXPECT(p.blocks == N && check_errors(&p) == 0 && p.prbs_blocks == N);
+	buf[9 * 4096 + 100] ^= 0x80;
+	p = run(buf, len, 0);
+	EXPECT(p.bad_blocks == 1 && p.bad_words == 1);
+	len = gen_kind(buf, 512, 0, 8, STREAM_KIND_PRBS31);
+	len += gen_kind(buf + len, 512, 8, 8, STREAM_KIND_WORD);
+	p = run(buf, len, 0);
+	EXPECT(p.blocks == 16 && check_errors(&p) == 0 && p.prbs_blocks == 8);
+
+	printf("PRBS31: эталонные первые слова\n");
+	{
+		/* из 31 единицы: 28 нулей (1 ^ 1), три единицы, на 32-м шаге в бит 30 доходит
+		 * первый ноль; дальше — по тем же правилам */
+		uint32_t s = STREAM_PRBS31_SEED;
+		EXPECT(stream_prbs31(&s) == 0x70000000u);
+		EXPECT(stream_prbs31(&s) == 0x3F000000u);
+		EXPECT(stream_prbs31(&s) == 0x1C700000u);
+	}
+
+	printf("неизвестный вид нагрузки: синхронизации нет\n");
+	len = gen_kind(buf, 512, 0, 4, 7);
+	p = run(buf, len, 0);
+	EXPECT(p.blocks == 0);
 
 	printf("хвост не кратен 4\n");
 	len = gen(buf, 512, 0, 4);

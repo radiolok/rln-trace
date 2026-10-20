@@ -19,6 +19,7 @@ struct parser {
 	uint32_t hdr[STREAM_HDR_WORDS];
 	uint32_t k;          /* слово внутри блока */
 	uint32_t words;      /* длина текущего блока в словах */
+	uint32_t kind;       /* вид нагрузки текущего блока, STREAM_KIND_* */
 	int synced;
 	int have_seq;
 	int bad;             /* в текущем блоке есть испорченные слова */
@@ -35,6 +36,7 @@ struct parser {
 	uint64_t desync;     /* потеря синхронизации после первой */
 	uint64_t skipped;    /* байт до синхронизации */
 	uint32_t block_len;
+	uint64_t prbs_blocks; /* блоков с нагрузкой PRBS31 */
 };
 
 /* Разобрать очередной кусок потока; куски идут подряд, блок может их пересекать */
