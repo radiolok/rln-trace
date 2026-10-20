@@ -1,0 +1,48 @@
+name: gw
+
+# Gateware: Verilator lint and testbenches, Yosys synth_gowin resource report.
+# The HSPI testbench checks the self-test stream with sw/usbstream/check.c.
+
+on:
+  push:
+    paths:
+      - 'gw/**'
+      - 'fw/ch569/usbstream/stream.h'
+      - 'sw/usbstream/check.*'
+      - '.github/workflows/gw.yml'
+  pull_request:
+    paths:
+      - 'gw/**'
+      - 'fw/ch569/usbstream/stream.h'
+      - 'sw/usbstream/check.*'
+      - '.github/workflows/gw.yml'
+  workflow_dispatch:
+
+jobs:
+  gw:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends verilator yosys g++ make
+          verilator --version
+          yosys -V
+
+      - name: Lint
+        run: make -C gw lint
+
+      - name: Test
+        run: make -C gw test
+
+      - name: Synth
+        run: make -C gw synth
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gw-synth
+          path: gw/build/synth/*.log
+          if-no-files-found: ignore
