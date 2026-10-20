@@ -1,0 +1,66 @@
+name: ch569
+
+# CH569 firmware (fw/ch569) with the hydrausb3 xPack toolchain, and the host receiver
+# (sw/usbstream) with its parser test.
+
+on:
+  push:
+    paths:
+      - 'fw/ch569/**'
+      - 'sw/usbstream/**'
+      - 'au/hydrausb3_fw'
+      - '.github/workflows/ch569.yml'
+  pull_request:
+    paths:
+      - 'fw/ch569/**'
+      - 'sw/usbstream/**'
+      - 'au/hydrausb3_fw'
+      - '.github/workflows/ch569.yml'
+  workflow_dispatch:
+
+env:
+  XPACK: xpack-riscv-none-elf-gcc-12.2.0-1
+  XPACK_URL: https://github.com/hydrausb3/riscv-none-elf-gcc-xpack/releases/download/12.2.0-1/xpack-riscv-none-elf-gcc-12.2.0-1-linux-x64.tar.gz
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: BSP (au/hydrausb3_fw)
+        run: git submodule update --init --recursive --depth 1 au/hydrausb3_fw
+
+      # stock riscv64-unknown-elf-gcc lacks interrupt("WCH-Interrupt-fast"), see fw/ch569/README.md
+      - name: Toolchain
+        run: |
+          mkdir -p "$RUNNER_TEMP/gcc"
+          curl -sSL "$XPACK_URL" | tar -xz -C "$RUNNER_TEMP/gcc"
+          echo "$RUNNER_TEMP/gcc/$XPACK/bin" >> "$GITHUB_PATH"
+
+      - name: Build usbstream
+        run: make -C fw/ch569/usbstream -j"$(nproc)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ch569-usbstream
+          path: |
+            fw/ch569/usbstream/build/usbstream.bin
+            fw/ch569/usbstream/build/usbstream.elf
+
+  host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: libusb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libusb-1.0-0-dev
+
+      - name: Build and test usbstream
+        run: |
+          make -C sw/usbstream
+          make -C sw/usbstream test
+          make -C sw/usbstream clean
+          make -C sw/usbstream test CFLAGS="-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all"
