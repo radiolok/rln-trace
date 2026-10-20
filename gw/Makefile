@@ -10,19 +10,35 @@ BUILD     := build
 JOBS      ?= $(shell nproc 2>/dev/null || echo 4)
 
 # top -> sources
-TPIU_SRCS := cores/tpiu_align.sv cores/tpiu_deframer.sv cores/tpiu_idle.sv cores/tpiu_rx.sv
+TPIU_SRCS  := cores/tpiu_align.sv cores/tpiu_deframer.sv cores/tpiu_idle.sv cores/tpiu_rx.sv
+HSPI_SRCS  := cores/selftest_gen.sv cores/hspi_tx.sv cores/selftest_hspi.sv
 
-TOPS  := tpiu_rx
-TESTS := tpiu
+TOPS  := tpiu_rx selftest_hspi
+TESTS := tpiu hspi8 hspi16 hspi32 hspi16r
 
-srcs_tpiu_rx := $(TPIU_SRCS)
+srcs_tpiu_rx       := $(TPIU_SRCS)
+srcs_selftest_hspi := $(HSPI_SRCS)
 
-# test -> top and testbench
+# test -> top, testbench, extra sources, verilator -G and C++ -D for the build
 top_tpiu := tpiu_rx
 tb_tpiu  := test/tpiu/tb_tpiu.cpp
 
+define hspi_test
+top_$(1)    := selftest_hspi
+tb_$(1)     := test/hspi/tb_hspi.cpp
+extra_$(1)  := ../sw/usbstream/check.c
+deps_$(1)   := test/models/ch569_hspi.h ../sw/usbstream/check.h ../fw/ch569/usbstream/stream.h
+vflags_$(1) := -GW=$(2) $(if $(3),-GCRC_INIT=$(3) -GCRC_REFLECT=1 -GCRC_XOROUT=$(3))
+cflags_$(1) := -DHSPI_W=$(2) $(if $(3),-DHSPI_CRC_INIT=$(3) -DHSPI_CRC_REFLECT=1 -DHSPI_CRC_XOROUT=$(3))
+endef
+$(eval $(call hspi_test,hspi8,8))
+$(eval $(call hspi_test,hspi16,16))
+$(eval $(call hspi_test,hspi32,32))
+$(eval $(call hspi_test,hspi16r,16,65535))
+
 VFLAGS := -Wall --x-assign unique --x-initial unique
-CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/../fw/ch569/usbstream -I$(CURDIR)/../sw/usbstream
+CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
+               -I$(CURDIR)/../fw/ch569/usbstream -I$(CURDIR)/../sw/usbstream
 
 .SECONDEXPANSION:
 .SECONDARY:
@@ -37,18 +53,18 @@ test: $(addprefix test-,$(TESTS))
 test-%: $(BUILD)/%/tb
 	$<
 
-$(BUILD)/%/tb: $$(srcs_$$(top_$$*)) $$(tb_$$*) $$(extra_$$*) test/common/sim.h
+$(BUILD)/%/tb: $$(srcs_$$(top_$$*)) $$(tb_$$*) $$(extra_$$*) $$(deps_$$*) test/common/sim.h
 	@mkdir -p $(BUILD)/$*
-	$(VERILATOR) --cc --exe --build -j $(JOBS) $(VFLAGS) -Wno-fatal \
+	$(VERILATOR) --cc --exe --build -j $(JOBS) $(VFLAGS) $(vflags_$*) -Wno-fatal \
 	  --top-module $(top_$*) -Mdir $(BUILD)/$* -o tb \
-	  -CFLAGS "$(CXXFLAGS_TB)" \
+	  -CFLAGS "$(CXXFLAGS_TB) $(cflags_$*)" \
 	  $(srcs_$(top_$*)) $(abspath $(tb_$*) $(extra_$*))
 
 synth: $(addprefix synth-,$(TOPS))
 synth-%:
 	@mkdir -p $(BUILD)/synth
 	$(YOSYS) -l $(BUILD)/synth/$*.log -p 'read_verilog -sv $(srcs_$*); synth_gowin -top $*; stat' > /dev/null
-	@sed -n '/^=== $* ===/,/^$$/p;/Number of cells/p' $(BUILD)/synth/$*.log | tail -n 20
+	@echo "== $*"; tail -n 40 $(BUILD)/synth/$*.log | grep -E '^ +(Number of cells|LUT|ALU|DFF|MUX|BSRAM|SDP|DP)'
 
 clean:
 	rm -rf $(BUILD)
