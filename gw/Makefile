@@ -25,6 +25,7 @@ VFLAGS := -Wall --x-assign unique --x-initial unique
 CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/../fw/ch569/usbstream -I$(CURDIR)/../sw/usbstream
 
 .SECONDEXPANSION:
+.SECONDARY:
 
 all: lint test synth
 
@@ -41,7 +42,7 @@ $(BUILD)/%/tb: $$(srcs_$$(top_$$*)) $$(tb_$$*) $$(extra_$$*) test/common/sim.h
 	$(VERILATOR) --cc --exe --build -j $(JOBS) $(VFLAGS) -Wno-fatal \
 	  --top-module $(top_$*) -Mdir $(BUILD)/$* -o tb \
 	  -CFLAGS "$(CXXFLAGS_TB)" \
-	  $(srcs_$(top_$*)) $(tb_$*) $(extra_$*)
+	  $(srcs_$(top_$*)) $(abspath $(tb_$*) $(extra_$*))
 
 synth: $(addprefix synth-,$(TOPS))
 synth-%:
