@@ -12,16 +12,20 @@ JOBS      ?= $(shell nproc 2>/dev/null || echo 4)
 # top -> sources
 TPIU_SRCS  := cores/tpiu_align.sv cores/tpiu_deframer.sv cores/tpiu_idle.sv cores/tpiu_rx.sv
 HSPI_SRCS  := cores/selftest_gen.sv cores/hspi_tx.sv cores/selftest_hspi.sv
+TRACE_SRCS := $(TPIU_SRCS) cores/trace_capture.sv cores/async_fifo.sv cores/trace_rx.sv
 
-TOPS  := tpiu_rx selftest_hspi
-TESTS := tpiu hspi8 hspi16 hspi32 hspi16r
+TOPS  := tpiu_rx trace_rx selftest_hspi
+TESTS := tpiu trace hspi8 hspi16 hspi32 hspi16r
 
 srcs_tpiu_rx       := $(TPIU_SRCS)
 srcs_selftest_hspi := $(HSPI_SRCS)
+srcs_trace_rx      := $(TRACE_SRCS)
 
 # test -> top, testbench, extra sources, verilator -G and C++ -D for the build
 top_tpiu := tpiu_rx
 tb_tpiu  := test/tpiu/tb_tpiu.cpp
+top_trace := trace_rx
+tb_trace  := test/trace/tb_trace.cpp
 
 define hspi_test
 top_$(1)    := selftest_hspi
@@ -53,7 +57,7 @@ test: $(addprefix test-,$(TESTS))
 test-%: $(BUILD)/%/tb
 	$<
 
-$(BUILD)/%/tb: $$(srcs_$$(top_$$*)) $$(tb_$$*) $$(extra_$$*) $$(deps_$$*) test/common/sim.h
+$(BUILD)/%/tb: $$(srcs_$$(top_$$*)) $$(tb_$$*) $$(extra_$$*) $$(deps_$$*) $(wildcard test/common/*.h)
 	@mkdir -p $(BUILD)/$*
 	$(VERILATOR) --cc --exe --build -j $(JOBS) $(VFLAGS) $(vflags_$*) -Wno-fatal \
 	  --top-module $(top_$*) -Mdir $(BUILD)/$* -o tb \
