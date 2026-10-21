@@ -63,7 +63,7 @@ make -C gw board-gowin                   # Gowin EDA под Windows из WSL (gw
 
 | Дата | Тулчейн | LUT4 | ALU | DFF | BSRAM | Fmax clk / HTCLK |
 |---|---|---|---|---|---|---|
-| 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 (OSS CAD Suite 2026-10-20) | 1022 (4 %) | 354 | 539 | 1 | 135 / 149 МГц (нужно 60 / 120) |
+| 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 (OSS CAD Suite 2026-10-20) | 1002 (4 %) | 354 | 549 | 1 | 150 / 197 МГц (нужно 60 / 120) |
 | 2026-10-21 | Gowin EDA 1.9.12.04 | 572 LUT | 203 | 533 | 1 | 112 / 170 МГц |
 
 Оценки Fmax у nextpnr заметно оптимистичнее, для подписи по таймингам надёжнее Gowin. Он же нашёл
