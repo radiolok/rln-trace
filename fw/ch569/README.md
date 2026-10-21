@@ -24,6 +24,8 @@ git submodule update --init --recursive --depth 1 au/hydrausb3_fw
 | HydraUSB3 v1 ([`board_hydrausb3.c`](common/board/board_hydrausb3.c)) | ULED PB22 — статус | UBTN PB23 не используется |
 
 Светодиод статуса горит постоянно до перечисления, затем мигает раз в 0,5 с на USB3 и раз в 1 с на USB2.
+На EVT проверено 2026-10-21: с `hspi2usb` на USB3 мигает LED0, LED2 не горит; прошивка с файлом
+HydraUSB3 мигала LED1 — это его ULED на PB22.
 
 ## Тулчейн
 

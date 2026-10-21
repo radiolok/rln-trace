@@ -44,6 +44,7 @@ module hspi_tx #(
     output logic         hspi_oe,
     input  logic         hspi_ack,
 
+    input  logic         cfg_hold,          // do not start a packet (the bus is the CH569's)
     input  logic [7:0]   cfg_gap,
     input  logic [7:0]   cfg_ack_timeout,   // 0 = wait for ack low forever
 
@@ -134,7 +135,7 @@ module hspi_tx #(
         end else begin
             case (state)
                 S_IDLE: begin
-                    if (in_valid) begin
+                    if (in_valid && !cfg_hold) begin
                         hspi_req <= 1'b1;
                         usdf     <= in_usdf;
                         state    <= S_WAIT_ACK;

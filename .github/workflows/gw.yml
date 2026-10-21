@@ -47,9 +47,16 @@ jobs:
       - name: Synth
         run: make -C gw synth
 
+      - name: Tang Nano 20K, step 0 (lint, Yosys synth)
+        run: |
+          make -C gw board-lint
+          make -C gw board-synth
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: gw-synth
-          path: gw/build/synth/*.log
+          path: |
+            gw/build/synth/*.log
+            gw/build/tangnano20k/synth.log
           if-no-files-found: ignore

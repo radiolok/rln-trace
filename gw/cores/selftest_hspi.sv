@@ -17,6 +17,7 @@ module selftest_hspi #(
     input  logic         cfg_kind,
     input  logic [13:0]  cfg_block_words,   // at most 1024: an HSPI packet carries 4096 bytes
     input  logic [25:0]  cfg_usdf,
+    input  logic         cfg_hold,
     input  logic [7:0]   cfg_gap,
     input  logic [7:0]   cfg_ack_timeout,
 
@@ -47,7 +48,7 @@ module selftest_hspi #(
         .clk, .rst,
         .in_data(data), .in_last(last), .in_valid(valid), .in_ready(ready), .in_usdf(cfg_usdf),
         .hspi_req, .hspi_vld, .hspi_data, .hspi_oe, .hspi_ack,
-        .cfg_gap, .cfg_ack_timeout,
+        .cfg_hold, .cfg_gap, .cfg_ack_timeout,
         .seq, .cnt_packets, .cnt_ack_timeout
     );
 endmodule

@@ -6,14 +6,16 @@ Gowin EDA: `logic`, `always_ff`/`always_comb`, параметры, без interf
 | Папка | Что |
 |---|---|
 | [`cores/`](cores/) | Платформонезависимые ядра: приём TPIU, метки времени, пакетизатор, SWD/JTAG, CSR, мосты к USB-чипу (HSPI для CH569, UHSIF для CH32H417) за общим интерфейсом потоков |
-| `platform/` | Платформенный слой: примитивы Gowin (IDDR, IODELAY, PLL, SDRAM), верхние модули плат. Пока пусто |
-| `boards/` | Сборка под конкретные платы: Tang Nano 20K (макет), зонд B, SLogic16U3. Пока пусто |
+| [`platform/`](platform/) | Платформенный слой Gowin; пока только поведенческие модели примитивов (rPLL, ODDR, IOBUF) для Verilator |
+| [`boards/`](boards/) | Верхние модули плат: [Tang Nano 20K, шаг 0](boards/tangnano20k/) — самотест в CH569 по HSPI и замер CRC; дальше зонд B, SLogic16U3 |
 | [`test/`](test/) | Тестбенчи Verilator на C++, модели внешних микросхем |
 
 ```sh
 make -C gw lint     # verilator --lint-only -Wall
 make -C gw test     # все тестбенчи
 make -C gw synth    # yosys synth_gowin, отчёт о ресурсах в gw/build/synth/
+make -C gw board-synth                               # Tang Nano 20K, шаг 0
+make -C gw board-pnr OSS=~/.local/opt/oss-cad-suite/bin/   # битстрим (nextpnr-himbaechel)
 ```
 
 Нужны Verilator 5 и Yosys с `synth_gowin`. Локально — Verilator 5.034 и Yosys 0.51, в CI — пакеты
@@ -32,6 +34,7 @@ Ubuntu 24.04.
 | [`trace_rx`](cores/trace_rx.sv) | Весь приём трассы через оба домена: захват → FIFO → `tpiu_rx`; слова, не влезшие в FIFO, считаются (счётчик в коде Грея) |
 | [`selftest_gen`](cores/selftest_gen.sv) | Генератор потока самотеста в формате [`stream.h`](../fw/ch569/usbstream/stream.h): нагрузка `stream_word(k)` или PRBS31, проверяется на ПК тем же `sw/usbstream` |
 | [`hspi_tx`](cores/hspi_tx.sv) | Передатчик HSPI в CH569 на 8/16/32 бита: запрос и готовность, заголовок с номером пакета и полем пользователя, CRC16/CRC32 с настраиваемыми параметрами. Протокол — [`doc/ch569-hspi.md`](../doc/ch569-hspi.md) |
+| [`uart_tx`](cores/uart_tx.sv), [`uart_hex`](cores/uart_hex.sv) | UART 8N1 и выгрузка пакетов `hspi_rx` hex-строками для `find_crc.py` |
 | [`selftest_hspi`](cores/selftest_hspi.sv) | Генератор и передатчик вместе, блок на пакет: ПЛИС-часть шага 0 |
 | [`hspi_rx`](cores/hspi_rx.sv) | Приём HSPI от CH569 (команды) на такте HTCLK: HTRDY только при месте под целый пакет, CRC отделяется линией задержки, признак «пакет хороший» на закрывающем слове; сырой режим для замера CRC. FIFO в один блок BSRAM |
 

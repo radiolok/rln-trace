@@ -14,20 +14,26 @@ TPIU_SRCS  := cores/tpiu_align.sv cores/tpiu_deframer.sv cores/tpiu_idle.sv core
 HSPI_SRCS  := cores/selftest_gen.sv cores/hspi_tx.sv cores/selftest_hspi.sv
 TRACE_SRCS := $(TPIU_SRCS) cores/trace_capture.sv cores/async_fifo.sv cores/trace_rx.sv
 HSPIRX_SRCS := cores/async_fifo.sv cores/hspi_rx.sv
+UART_SRCS  := cores/uart_tx.sv cores/uart_hex.sv
+STEP0_SRCS := $(HSPI_SRCS) $(HSPIRX_SRCS) $(UART_SRCS) boards/tangnano20k/top_step0.sv
+GOWIN_SIM  := platform/gowin/sim/gowin_prims.sv
 
 TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx
-TESTS := tpiu trace hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r
+TESTS := tpiu trace hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
 
 srcs_tpiu_rx       := $(TPIU_SRCS)
 srcs_selftest_hspi := $(HSPI_SRCS)
 srcs_trace_rx      := $(TRACE_SRCS)
 srcs_hspi_rx       := $(HSPIRX_SRCS)
+srcs_uart_hex_top  := $(UART_SRCS) test/uart/uart_hex_top.sv
 
 # test -> top, testbench, extra sources, verilator -G and C++ -D for the build
 top_tpiu := tpiu_rx
 tb_tpiu  := test/tpiu/tb_tpiu.cpp
 top_trace := trace_rx
 tb_trace  := test/trace/tb_trace.cpp
+top_uart  := uart_hex_top
+tb_uart   := test/uart/tb_uart.cpp
 
 define hspi_test
 top_$(1)    := selftest_hspi
@@ -61,7 +67,7 @@ CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
 .SECONDEXPANSION:
 .SECONDARY:
 
-all: lint test crc-check synth
+all: lint test crc-check synth board-lint board-synth
 
 lint: $(addprefix lint-,$(TOPS))
 lint-%:
@@ -85,13 +91,46 @@ crc-check: $(BUILD)/hspirx16r/tb
 	python3 ../tools/hspi-crc/find_crc.py $(BUILD)/hspirx16r/raw.txt | tee $(BUILD)/hspirx16r/crc.txt
 	grep -q 'CRC16 over header+payload, CRC bytes little-endian, init 0xFFFF, refin 1, refout 1, xorout 0xFFFF' $(BUILD)/hspirx16r/crc.txt
 
+# resource lines of `stat`, old (Yosys 0.3x) and new (0.5x+) layouts
+STAT_RE := (cells|ALU|DFF|LUT[0-9]|MUX2|SDP|DPB|rPLL|ODDR|IOBUF)
+
 synth: $(addprefix synth-,$(TOPS))
 synth-%:
 	@mkdir -p $(BUILD)/synth
 	$(YOSYS) -l $(BUILD)/synth/$*.log -p 'read_verilog -sv $(srcs_$*); synth_gowin -top $*; stat' > /dev/null
-	@echo "== $*"; tail -n 40 $(BUILD)/synth/$*.log | grep -E '^ +(Number of cells|LUT|ALU|DFF|MUX|BSRAM|SDP|DP)'
+	@echo "== $*"; tail -n 45 $(BUILD)/synth/$*.log | grep -E '$(STAT_RE)' || true
+
+# ---------------------------------------------------------------- boards
+# Tang Nano 20K, bench step 0. board-synth needs only Yosys (CI); board-pnr needs
+# nextpnr-himbaechel and gowin_pack (OSS CAD Suite: make board-pnr OSS=<dir>/bin/).
+OSS        ?=
+NEXTPNR    ?= $(OSS)nextpnr-himbaechel
+GOWIN_PACK ?= $(OSS)gowin_pack
+BOARD_YOSYS ?= $(if $(OSS),$(OSS)yosys,$(YOSYS))
+TN20K      := boards/tangnano20k
+TN20K_OUT  := $(BUILD)/tangnano20k
+
+board-lint:
+	$(VERILATOR) --lint-only $(VFLAGS) -Wno-PINCONNECTEMPTY -Wno-DECLFILENAME \
+	  --top-module top_step0 $(GOWIN_SIM) $(STEP0_SRCS)
+
+board-synth: $(TN20K_OUT)/top_step0.json
+$(TN20K_OUT)/top_step0.json: $(STEP0_SRCS)
+	@mkdir -p $(TN20K_OUT)
+	$(BOARD_YOSYS) -l $(TN20K_OUT)/synth.log -p 'read_verilog -sv $(STEP0_SRCS); synth_gowin -top top_step0 -json $@; stat' > /dev/null
+	@echo "== top_step0"; tail -n 45 $(TN20K_OUT)/synth.log | grep -E '$(STAT_RE)' || true
+
+board-pnr: $(TN20K_OUT)/top_step0.fs
+$(TN20K_OUT)/top_step0.fs: $(TN20K_OUT)/top_step0.json $(TN20K)/tangnano20k.cst $(TN20K)/clocks.py
+	$(NEXTPNR) --json $< --write $(TN20K_OUT)/top_step0_pnr.json \
+	  --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=$(TN20K)/tangnano20k.cst \
+	  --pre-pack $(TN20K)/clocks.py --report $(TN20K_OUT)/report.json -l $(TN20K_OUT)/pnr.log > /dev/null 2>&1 \
+	  || { tail -n 30 $(TN20K_OUT)/pnr.log; exit 1; }
+	$(GOWIN_PACK) -d GW2A-18C -o $@ $(TN20K_OUT)/top_step0_pnr.json
+	@grep -E 'Max frequency' $(TN20K_OUT)/pnr.log | tail -n 2
+	@grep -P '^Info: \t +(LUT4|ALU|DFF|BSRAM|IOB|rPLL|IOLOGICO):' $(TN20K_OUT)/pnr.log
 
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all lint test crc-check synth clean
+.PHONY: all lint test crc-check synth board-lint board-synth board-pnr clean
