@@ -1,7 +1,9 @@
-// uart_hex + uart_tx: packets in, the serial line decoded back to text and
-// compared with the hex lines find_crc.py expects.
+// uart_hex + uart_status through uart_mux + uart_tx: packets in, status lines
+// started at random, the serial line decoded back to text. Packet lines must
+// come out whole and in order, as find_crc.py expects; status lines whole too.
 //
 // SPDX-License-Identifier: BSD-3-Clause
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -11,6 +13,12 @@
 #include "sim.h"
 
 static const int DIV = 5;
+
+// all packet text and every started status line received
+static bool packets_done(const std::string &got, size_t packet_chars, int status_lines, size_t status_len)
+{
+	return got.size() >= packet_chars + status_lines * status_len;
+}
 
 struct Packet {
 	std::vector<uint8_t> bytes;
@@ -58,7 +66,13 @@ int main(int argc, char **argv)
 	std::string got;
 	int prev = 1, cnt = -1, bit = 0;
 	uint8_t sh = 0;
-	for (long cyc = 0; cyc < 2'000'000 && got.size() < want.size(); cyc++) {
+	top->status = 0x0123456789ABCDEFull;
+	int status_lines = 0;
+	std::string want_status = "# 89abcdef 01234567\n";
+	for (long cyc = 0; cyc < 4'000'000; cyc++) {
+		top->status_start = !top->status_busy && r.pct(1) && status_lines < 8;
+		if (top->status_start)
+			status_lines++;
 		top->in_valid = wi < words.size() && !r.pct(20);
 		if (wi < words.size()) {
 			top->in_data = words[wi].d;
@@ -88,9 +102,29 @@ int main(int argc, char **argv)
 		tick(top);
 		if (fire)
 			wi++;
+		if (wi == words.size() && !top->status_busy && cnt < 0 && packets_done(got, want.size(), status_lines, want_status.size()))
+			break;
 	}
-	EXPECT(got == want);
-	if (got != want)
+	// split into lines: status lines out, packet lines in order
+	std::string packets;
+	int status_seen = 0;
+	size_t a = 0;
+	for (size_t b; (b = got.find('\n', a)) != std::string::npos; a = b + 1) {
+		std::string line = got.substr(a, b + 1 - a);
+		if (line[0] == '#') {
+			EXPECT(line == want_status);
+			status_seen++;
+		} else {
+			packets += line;
+		}
+	}
+	EXPECT(a == got.size());
+	EXPECT(packets == want);
+	EXPECT_EQ(status_seen, status_lines);
+	EXPECT(status_lines > 2);
+	if (getenv("TB_DEBUG"))
+		std::printf("    status lines %d, chars %zu\n", status_lines, got.size());
+	if (packets != want)
 		std::printf("    got:\n%s    want:\n%s", got.c_str(), want.c_str());
 	delete top;
 	std::printf(g_failed ? "FAILED\n" : "all passed\n");

@@ -1,42 +1,47 @@
-// Tang Nano 20K, bench step 0: FPGA -> HSPI 8 bit -> CH569 (fw/ch569/hspi2usb)
+// Tang Nano 20K, bench step 0: FPGA -> HSPI 16 bit -> CH569 (fw/ch569/hspi2usb)
 // -> USB3 -> sw/usbstream, plus the CH569 -> FPGA direction for measuring the
 // HSPI CRC: packets from the CH569 come out on the BL616 UART as hex lines for
 // tools/hspi-crc/find_crc.py.
 //
-//   27 MHz -> rPLL -> clk (60 MHz by default; HRCLK of the CH569 and the
-//   self-test). HTCLK of the CH569 clocks hspi_rx.
+//   27 MHz -> rPLL -> clk, CLK_MHZ (15 for jumper wires, up to 96): HRCLK of the
+//   CH569 and the self-test. HTCLK of the CH569 clocks hspi_rx.
 //
-// Buttons: S1 reset, S2 self-test on/off (on after reset).
-// LEDs (lit low): 0 heartbeat, 1 PLL lock, 2 self-test on, 3 HSPI packets out,
-// 4 packets in, 5 HTACK timeout seen.
+// Buttons: S1 reset, S2 self-test on/off (on after reset). The board LEDs are
+// gone (their resistors removed, pins 15-20 are bench signals); once a second a
+// status line goes to the UART instead:
+//   # <HSPI packets out> <packets in> <bad packets in> <HTACK timeouts> <flags>
+//   flags: bit 0 self-test on, bit 1 PLL locked, bits 15:8 CLK_MHZ
 // The HD bus is the CH569's while it requests (HTREQ): no packet starts then.
 // HD0 is the CH569 boot pin: the FPGA leaves HD released (pull-up) unless it
-// sends. Pins: tangnano20k.cst, gw/boards/tangnano20k/README.md.
+// sends. Pins: tangnano20k.cst, README.md.
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
 module top_step0 #(
-    parameter int PLL_IDIV  = 8,         // 27 MHz * 20 / 9 = 60 MHz (gowin_pll)
-    parameter int PLL_FBDIV = 19,
-    parameter int PLL_ODIV  = 16,
-    parameter int UART_DIV  = 521        // 60 MHz / 115200
+    parameter int CLK_MHZ = 15           // 15, 30, 60 or 96
 ) (
-    input  logic       clk27,
-    input  logic       s1,
-    input  logic       s2,
-    output logic [5:0] led_n,
-    output logic       uart_txd,
+    input  logic        clk27,
+    input  logic        s1,
+    input  logic        s2,
+    output logic        uart_txd,
 
-    inout  wire  [7:0] hd,
-    output logic       hrclk,            // -> CH569 HRCLK
-    output logic       hract,            // -> CH569 HRACT (request)
-    output logic       hrvld,            // -> CH569 HRVLD
-    input  logic       htack,            // <- CH569 HTACK (ready to receive)
-    input  logic       htclk,            // <- CH569 HTCLK
-    input  logic       htreq,            // <- CH569 HTREQ
-    input  logic       htvld,            // <- CH569 HTVLD
-    output logic       htrdy             // -> CH569 HTRDY
+    inout  wire  [15:0] hd,
+    output logic        hrclk,           // -> CH569 HRCLK
+    output logic        hract,           // -> CH569 HRACT (request)
+    output logic        hrvld,           // -> CH569 HRVLD
+    input  logic        htack,           // <- CH569 HTACK (ready to receive)
+    input  logic        htclk,           // <- CH569 HTCLK
+    input  logic        htreq,           // <- CH569 HTREQ
+    input  logic        htvld,           // <- CH569 HTVLD
+    output logic        htrdy            // -> CH569 HTRDY
 );
+    // 27 MHz * (FBDIV + 1) / (IDIV + 1), VCO = out * ODIV in 500..1250 MHz (gowin_pll)
+    localparam int PLL_IDIV  = 8;
+    localparam int PLL_FBDIV = CLK_MHZ == 96 ? 31 : CLK_MHZ == 60 ? 19 : CLK_MHZ == 30 ? 9 : 4;
+    localparam int PLL_ODIV  = CLK_MHZ == 96 ? 8  : CLK_MHZ == 60 ? 16 : CLK_MHZ == 30 ? 32 : 48;
+    localparam int UART_DIV  = (CLK_MHZ * 1000000 + 57600) / 115200;
+    localparam int SECOND    = CLK_MHZ * 1000000;
+
     // ---------------------------------------------------------------- clocks, resets
     logic clk, lock;
 
@@ -59,18 +64,21 @@ module top_step0 #(
     always_ff @(posedge htclk) rst_r <= {rst_r[1:0], rst};
     assign rx_rst = rst_r[2];
 
-    // ---------------------------------------------------------------- S2: self-test on/off
-    logic [19:0] tick;
+    // ---------------------------------------------------------------- 1 s tick, S2
+    logic [26:0] sec_cnt;
+    logic        sec;
     logic [2:0]  s2_s;
     logic        enable;
     always_ff @(posedge clk) begin
         if (rst) begin
-            tick   <= '0;
-            s2_s   <= '0;
-            enable <= 1'b1;
+            sec_cnt <= '0;
+            sec     <= 1'b0;
+            s2_s    <= '0;
+            enable  <= 1'b1;
         end else begin
-            tick <= tick + 20'd1;
-            if (tick == '0) begin                 // ~57 Hz sampling: no bounce
+            sec <= sec_cnt == 27'(SECOND - 1);
+            sec_cnt <= sec ? '0 : sec_cnt + 27'd1;
+            if (sec_cnt[13:0] == '0) begin       // sampled every ~1 ms at 15 MHz: no bounce
                 s2_s <= {s2_s[1:0], s2};
                 if (s2_s[1] && !s2_s[2]) enable <= !enable;
             end
@@ -78,9 +86,9 @@ module top_step0 #(
     end
 
     // ---------------------------------------------------------------- HD bus
-    logic [7:0] hd_o, hd_i;
-    logic       hd_oe;
-    for (genvar i = 0; i < 8; i++) begin : g_hd
+    logic [15:0] hd_o, hd_i;
+    logic        hd_oe;
+    for (genvar i = 0; i < 16; i++) begin : g_hd
         IOBUF u_io (.O(hd_i[i]), .IO(hd[i]), .I(hd_o[i]), .OEN(!hd_oe));
     end
 
@@ -93,7 +101,7 @@ module top_step0 #(
     logic [31:0] cnt_blocks, cnt_packets, cnt_ack_timeout;
     always_ff @(posedge clk) htreq_s <= {htreq_s[0], htreq};
 
-    selftest_hspi #(.W(8)) u_selftest (
+    selftest_hspi #(.W(16)) u_selftest (
         .clk, .rst,
         .cfg_enable(enable), .cfg_kind(1'b1), .cfg_block_words(14'd1024),
         .cfg_usdf(26'h0525354), .cfg_hold(htreq_s[1]), .cfg_gap(8'd2), .cfg_ack_timeout(8'd64),
@@ -104,45 +112,57 @@ module top_step0 #(
     // ---------------------------------------------------------------- CH569 -> FPGA -> UART
     logic [31:0] rx_data;
     logic        rx_last, rx_good, rx_valid, rx_ready;
-    logic [31:0] rx_packets, rx_bad;
+    logic [31:0] rx_packets_rx, rx_bad_rx;   // HTCLK domain, not used here
 
-    hspi_rx #(.W(8)) u_rx (
+    hspi_rx #(.W(16)) u_rx (
         .rx_clk(htclk), .rx_rst, .rx_req(htreq), .rx_vld(htvld), .rx_data(hd_i), .rx_rdy(htrdy),
         .cfg_raw(1'b1),
         .clk, .rst,
         .out_data(rx_data), .out_last(rx_last), .out_good(rx_good), .out_valid(rx_valid), .out_ready(rx_ready),
-        .cnt_packets(rx_packets), .cnt_bad(rx_bad)
+        .cnt_packets(rx_packets_rx), .cnt_bad(rx_bad_rx)
     );
 
-    logic [7:0] ch;
-    logic       ch_valid, ch_ready;
+    // packets in, counted on the sys side by their closing words
+    logic [31:0] rx_packets, rx_bad;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            rx_packets <= '0;
+            rx_bad     <= '0;
+        end else if (rx_valid && rx_ready && rx_last) begin
+            rx_packets <= rx_packets + 32'd1;
+            if (!rx_good) rx_bad <= rx_bad + 32'd1;
+        end
+    end
+
+    logic [7:0] hex_c, st_c, ch;
+    logic       hex_v, hex_r, st_v, st_r, ch_v, ch_r, st_busy;
 
     uart_hex u_hex (
         .clk, .rst,
         .in_data(rx_data), .in_last(rx_last), .in_good(rx_good), .in_valid(rx_valid), .in_ready(rx_ready),
-        .out_data(ch), .out_valid(ch_valid), .out_ready(ch_ready)
+        .out_data(hex_c), .out_valid(hex_v), .out_ready(hex_r)
+    );
+
+    uart_status #(.N(5)) u_status (
+        .clk, .rst,
+        .words({16'd0, 8'(CLK_MHZ), 6'd0, lock, enable,
+                cnt_ack_timeout, rx_bad, rx_packets, cnt_packets}),
+        .start(sec && !st_busy), .busy(st_busy),
+        .out_data(st_c), .out_valid(st_v), .out_ready(st_r)
+    );
+
+    uart_mux u_mux (
+        .clk, .rst,
+        .a_data(hex_c), .a_valid(hex_v), .a_ready(hex_r),
+        .b_data(st_c), .b_valid(st_v), .b_ready(st_r),
+        .out_data(ch), .out_valid(ch_v), .out_ready(ch_r)
     );
 
     uart_tx #(.DIV(UART_DIV)) u_uart (
-        .clk, .rst, .data(ch), .valid(ch_valid), .ready(ch_ready), .tx(uart_txd)
+        .clk, .rst, .data(ch), .valid(ch_v), .ready(ch_r), .tx(uart_txd)
     );
 
-    // ---------------------------------------------------------------- LEDs
-    // rx_packets lives in the HTCLK domain: its bit 6 toggles slowly, two flops are enough
-    logic [1:0]  rxp_s;
-    logic        ack_to_seen;
-    logic [25:0] hb;                      // heartbeat, ~1 Hz at 60 MHz
-    always_ff @(posedge clk) begin
-        hb    <= hb + 26'd1;
-        rxp_s <= {rxp_s[0], rx_packets[6]};
-        if (rst) ack_to_seen <= 1'b0;
-        else if (cnt_ack_timeout != 32'd0) ack_to_seen <= 1'b1;
-    end
-
-    assign led_n = ~{ack_to_seen, rxp_s[1], cnt_packets[6], enable, lock, hb[25]};
-
-    // not shown anywhere yet; kept for a CSR block
+    // kept for a CSR block
     logic unused;
-    assign unused = ^{tx_seq, cnt_blocks, rx_bad, rx_packets[31:7], rx_packets[5:0],
-                      cnt_packets[31:7], cnt_packets[5:0], tick[18:0], tick[19]};
+    assign unused = ^{tx_seq, cnt_blocks, rx_packets_rx, rx_bad_rx};
 endmodule

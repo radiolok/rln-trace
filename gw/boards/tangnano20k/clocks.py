@@ -1,9 +1,11 @@
 # nextpnr pre-pack script: per-clock targets for top_step0 (MHz).
-# clk: the PLL output (HRCLK of the CH569, the self-test); HTCLK of the CH569 runs
-# at its Fsys, up to 120 MHz. After synthesis a net may carry the name of a port
-# it drives, so each clock is looked up under every name it may have.
+# clk: the PLL output, CLK_MHZ from the environment (make passes TN20K_MHZ);
+# HTCLK of the CH569 runs at its Fsys, up to 120 MHz. After synthesis a net may
+# carry the name of a port it drives, so each clock is looked up under every name.
+import os
+
 CLOCKS = {
-    ("clk",): 60,
+    ("clk",): float(os.environ.get("CLK_MHZ", "15")),
     ("htclk", "u_rx.rx_clk"): 120,
 }
 names = {name for name, _ in ctx.nets}

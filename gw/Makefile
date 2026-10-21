@@ -14,7 +14,7 @@ TPIU_SRCS  := cores/tpiu_align.sv cores/tpiu_deframer.sv cores/tpiu_idle.sv core
 HSPI_SRCS  := cores/selftest_gen.sv cores/hspi_tx.sv cores/selftest_hspi.sv
 TRACE_SRCS := $(TPIU_SRCS) cores/trace_capture.sv cores/async_fifo.sv cores/trace_rx.sv
 HSPIRX_SRCS := cores/async_fifo.sv cores/hspi_rx.sv
-UART_SRCS  := cores/uart_tx.sv cores/uart_hex.sv
+UART_SRCS  := cores/uart_tx.sv cores/uart_hex.sv cores/uart_status.sv cores/uart_mux.sv
 STEP0_SRCS := $(HSPI_SRCS) $(HSPIRX_SRCS) $(UART_SRCS) boards/tangnano20k/top_step0.sv
 GOWIN_SIM  := platform/gowin/sim/gowin_prims.sv
 
@@ -109,20 +109,31 @@ GOWIN_PACK ?= $(OSS)gowin_pack
 BOARD_YOSYS ?= $(if $(OSS),$(OSS)yosys,$(YOSYS))
 TN20K      := boards/tangnano20k
 TN20K_OUT  := $(BUILD)/tangnano20k
+# HRCLK / self-test clock: 15 for jumper wires, 30, 60, 96 (gw/boards/tangnano20k/top_step0.sv)
+TN20K_MHZ  ?= 15
+TN20K_MUL_15 := 5
+TN20K_MUL_30 := 10
+TN20K_MUL_60 := 20
+TN20K_MUL_96 := 32
 
 board-lint:
-	$(VERILATOR) --lint-only $(VFLAGS) -Wno-PINCONNECTEMPTY -Wno-DECLFILENAME \
-	  --top-module top_step0 $(GOWIN_SIM) $(STEP0_SRCS)
+	for f in 15 30 60 96; do \
+	  $(VERILATOR) --lint-only $(VFLAGS) -Wno-PINCONNECTEMPTY -Wno-DECLFILENAME \
+	    --top-module top_step0 -GCLK_MHZ=$$f $(GOWIN_SIM) $(STEP0_SRCS) || exit 1; done
 
 board-synth: $(TN20K_OUT)/top_step0.json
-$(TN20K_OUT)/top_step0.json: $(STEP0_SRCS)
+$(TN20K_OUT)/top_step0.json: $(STEP0_SRCS) $(TN20K_OUT)/mhz-$(TN20K_MHZ)
 	@mkdir -p $(TN20K_OUT)
-	$(BOARD_YOSYS) -l $(TN20K_OUT)/synth.log -p 'read_verilog -sv $(STEP0_SRCS); synth_gowin -top top_step0 -json $@; stat' > /dev/null
+	$(BOARD_YOSYS) -l $(TN20K_OUT)/synth.log -p 'read_verilog -sv $(STEP0_SRCS); chparam -set CLK_MHZ $(TN20K_MHZ) top_step0; synth_gowin -top top_step0 -json $@; stat' > /dev/null
 	@echo "== top_step0"; tail -n 45 $(TN20K_OUT)/synth.log | grep -E '$(STAT_RE)' || true
+
+# a stamp per CLK_MHZ, so changing TN20K_MHZ rebuilds
+$(TN20K_OUT)/mhz-%:
+	@mkdir -p $(TN20K_OUT) && rm -f $(TN20K_OUT)/mhz-* && touch $@
 
 board-pnr: $(TN20K_OUT)/top_step0.fs
 $(TN20K_OUT)/top_step0.fs: $(TN20K_OUT)/top_step0.json $(TN20K)/tangnano20k.cst $(TN20K)/clocks.py
-	$(NEXTPNR) --json $< --write $(TN20K_OUT)/top_step0_pnr.json \
+	CLK_MHZ=$(TN20K_MHZ) $(NEXTPNR) --json $< --write $(TN20K_OUT)/top_step0_pnr.json \
 	  --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=$(TN20K)/tangnano20k.cst \
 	  --pre-pack $(TN20K)/clocks.py --report $(TN20K_OUT)/report.json -l $(TN20K_OUT)/pnr.log > /dev/null 2>&1 \
 	  || { tail -n 30 $(TN20K_OUT)/pnr.log; exit 1; }
@@ -135,10 +146,12 @@ $(TN20K_OUT)/top_step0.fs: $(TN20K_OUT)/top_step0.json $(TN20K)/tangnano20k.cst 
 GW_SH      ?= /mnt/c/gowin/Gowin_V1.9.12.04_x64/IDE/bin/gw_sh.exe
 GOWIN_WORK ?= $(shell wslpath -u "$$(cmd.exe /c 'echo %TEMP%' 2>/dev/null | tr -d '\r')" 2>/dev/null)/rln-trace-gowin
 
-board-gowin: $(STEP0_SRCS) $(TN20K)/tangnano20k.cst $(TN20K)/top_step0.sdc $(TN20K)/gowin.tcl
+board-gowin: $(STEP0_SRCS) $(TN20K)/tangnano20k.cst $(TN20K)/top_step0.sdc.in $(TN20K)/gowin.tcl
 	@test -x "$(GW_SH)" || { echo "no Gowin EDA at $(GW_SH)"; exit 1; }
 	rm -rf "$(GOWIN_WORK)" && mkdir -p "$(GOWIN_WORK)/src"
-	cp $(STEP0_SRCS) $(TN20K)/tangnano20k.cst $(TN20K)/top_step0.sdc "$(GOWIN_WORK)/src/"
+	cp $(STEP0_SRCS) $(TN20K)/tangnano20k.cst "$(GOWIN_WORK)/src/"
+	sed 's/@MUL@/$(TN20K_MUL_$(TN20K_MHZ))/g; s/@DIV@/9/g' $(TN20K)/top_step0.sdc.in > "$(GOWIN_WORK)/src/top_step0.sdc"
+	sed -i 's/parameter int CLK_MHZ = [0-9]*/parameter int CLK_MHZ = $(TN20K_MHZ)/' "$(GOWIN_WORK)/src/top_step0.sv"
 	cp $(TN20K)/gowin.tcl "$(GOWIN_WORK)/"
 	cd "$(GOWIN_WORK)" && "$(GW_SH)" gowin.tcl > gw_sh.log 2>&1; tail -n 5 "$(GOWIN_WORK)/gw_sh.log"
 	@mkdir -p $(TN20K_OUT)/gowin

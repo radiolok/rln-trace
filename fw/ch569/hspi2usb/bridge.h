@@ -12,7 +12,7 @@
 #define BRIDGE_BUFS 16          /* 4096-byte blocks in RAMX */
 #endif
 #ifndef BRIDGE_HSPI_WIDTH
-#define BRIDGE_HSPI_WIDTH 8     /* 8 on the bench (Tang Nano 20K), 16 on probe B */
+#define BRIDGE_HSPI_WIDTH 16    /* the bench (Tang Nano 20K) and probe B */
 #endif
 #ifndef BRIDGE_HSPI_RX_FALLING
 #define BRIDGE_HSPI_RX_FALLING 0 /* sample HD on the falling edge of HRCLK */

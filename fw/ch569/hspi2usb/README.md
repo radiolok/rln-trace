@@ -28,7 +28,7 @@
 проверяется без ПЛИС; `STAT` — счётчики. Остальные команды — как в примере HydraUSB3 (`USBS`, `LOGR`).
 
 ```sh
-make                       # WCH EVT, HSPI 8 бит; HSPI_WIDTH=16 для зонда B
+make                       # WCH EVT, HSPI 16 бит; HSPI_WIDTH=8 или 32
 make flash                 # плата в загрузчике
 ../../../sw/usbstream/usbstream -C SRCI -t 10 -C STAT
 ```

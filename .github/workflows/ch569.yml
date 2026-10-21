@@ -38,14 +38,14 @@ jobs:
           curl -sSL "$XPACK_URL" | tar -xz -C "$RUNNER_TEMP/gcc"
           echo "$RUNNER_TEMP/gcc/$XPACK/bin" >> "$GITHUB_PATH"
 
-      # both boards and every HSPI width build; the artifacts are the WCH EVT ones, 8-bit HSPI
+      # both boards and every HSPI width build; the artifacts are the WCH EVT ones, 16-bit HSPI
       - name: Build
         run: |
           for app in usbstream hspi2usb; do
             make -C fw/ch569/$app BOARD=hydrausb3 -j"$(nproc)"
             make -C fw/ch569/$app clean
           done
-          for w in 16 32; do
+          for w in 8 32; do
             make -C fw/ch569/hspi2usb HSPI_WIDTH=$w -j"$(nproc)"
             make -C fw/ch569/hspi2usb clean
           done
