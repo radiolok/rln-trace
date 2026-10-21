@@ -9,12 +9,14 @@ on:
       - 'gw/**'
       - 'fw/ch569/usbstream/stream.h'
       - 'sw/usbstream/check.*'
+      - 'tools/hspi-crc/**'
       - '.github/workflows/gw.yml'
   pull_request:
     paths:
       - 'gw/**'
       - 'fw/ch569/usbstream/stream.h'
       - 'sw/usbstream/check.*'
+      - 'tools/hspi-crc/**'
       - '.github/workflows/gw.yml'
   workflow_dispatch:
 
@@ -36,6 +38,11 @@ jobs:
 
       - name: Test
         run: make -C gw test
+
+      - name: CRC search on raw packets (step 0 rehearsal)
+        run: |
+          python3 tools/hspi-crc/find_crc.py --selftest
+          make -C gw crc-check
 
       - name: Synth
         run: make -C gw synth

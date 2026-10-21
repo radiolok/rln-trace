@@ -13,13 +13,15 @@ JOBS      ?= $(shell nproc 2>/dev/null || echo 4)
 TPIU_SRCS  := cores/tpiu_align.sv cores/tpiu_deframer.sv cores/tpiu_idle.sv cores/tpiu_rx.sv
 HSPI_SRCS  := cores/selftest_gen.sv cores/hspi_tx.sv cores/selftest_hspi.sv
 TRACE_SRCS := $(TPIU_SRCS) cores/trace_capture.sv cores/async_fifo.sv cores/trace_rx.sv
+HSPIRX_SRCS := cores/async_fifo.sv cores/hspi_rx.sv
 
-TOPS  := tpiu_rx trace_rx selftest_hspi
-TESTS := tpiu trace hspi8 hspi16 hspi32 hspi16r
+TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx
+TESTS := tpiu trace hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r
 
 srcs_tpiu_rx       := $(TPIU_SRCS)
 srcs_selftest_hspi := $(HSPI_SRCS)
 srcs_trace_rx      := $(TRACE_SRCS)
+srcs_hspi_rx       := $(HSPIRX_SRCS)
 
 # test -> top, testbench, extra sources, verilator -G and C++ -D for the build
 top_tpiu := tpiu_rx
@@ -40,6 +42,18 @@ $(eval $(call hspi_test,hspi16,16))
 $(eval $(call hspi_test,hspi32,32))
 $(eval $(call hspi_test,hspi16r,16,65535))
 
+define hspirx_test
+top_$(1)    := hspi_rx
+tb_$(1)     := test/hspi/tb_hspi_rx.cpp
+deps_$(1)   := test/models/ch569_hspi.h test/models/ch569_hspi_tx.h
+vflags_$(1) := -GW=$(2) $(if $(3),-GCRC_INIT=$(3) -GCRC_REFLECT=1 -GCRC_XOROUT=$(3))
+cflags_$(1) := -DHSPI_W=$(2) $(if $(3),-DHSPI_CRC_INIT=$(3) -DHSPI_CRC_REFLECT=1 -DHSPI_CRC_XOROUT=$(3))
+endef
+$(eval $(call hspirx_test,hspirx8,8))
+$(eval $(call hspirx_test,hspirx16,16))
+$(eval $(call hspirx_test,hspirx32,32))
+$(eval $(call hspirx_test,hspirx16r,16,65535))
+
 VFLAGS := -Wall --x-assign unique --x-initial unique
 CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
                -I$(CURDIR)/../fw/ch569/usbstream -I$(CURDIR)/../sw/usbstream
@@ -47,7 +61,7 @@ CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
 .SECONDEXPANSION:
 .SECONDARY:
 
-all: lint test synth
+all: lint test crc-check synth
 
 lint: $(addprefix lint-,$(TOPS))
 lint-%:
@@ -64,6 +78,13 @@ $(BUILD)/%/tb: $$(srcs_$$(top_$$*)) $$(tb_$$*) $$(extra_$$*) $$(deps_$$*) $(wild
 	  -CFLAGS "$(CXXFLAGS_TB) $(cflags_$*)" \
 	  $(srcs_$(top_$*)) $(abspath $(tb_$*) $(extra_$*))
 
+# Step 0 rehearsal: raw packets from hspi_rx -> tools/hspi-crc finds the CRC the
+# CH569 model was built with (16 bit, init/xorout 0xFFFF, reflected)
+crc-check: $(BUILD)/hspirx16r/tb
+	HSPI_RAW_DUMP=$(BUILD)/hspirx16r/raw.txt $< > /dev/null
+	python3 ../tools/hspi-crc/find_crc.py $(BUILD)/hspirx16r/raw.txt | tee $(BUILD)/hspirx16r/crc.txt
+	grep -q 'CRC16 over header+payload, CRC bytes little-endian, init 0xFFFF, refin 1, refout 1, xorout 0xFFFF' $(BUILD)/hspirx16r/crc.txt
+
 synth: $(addprefix synth-,$(TOPS))
 synth-%:
 	@mkdir -p $(BUILD)/synth
@@ -73,4 +94,4 @@ synth-%:
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all lint test synth clean
+.PHONY: all lint test crc-check synth clean

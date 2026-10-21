@@ -55,6 +55,9 @@ module trace_rx #(
 
     logic [31:0] word;
     logic        word_valid, full;
+    /* verilator lint_off UNUSEDSIGNAL */
+    logic [FIFO_AW:0] fifo_free;     // not needed: there is no backpressure to the target
+    /* verilator lint_on UNUSEDSIGNAL */
 
     trace_capture u_capture (
         .clk(trc_clk), .rst(trc_rst),
@@ -79,7 +82,7 @@ module trace_rx #(
     logic        f_valid, f_ready;
 
     async_fifo #(.DW(32), .AW(FIFO_AW)) u_fifo (
-        .wclk(trc_clk), .wrst(trc_rst), .wdata(word), .wen(word_valid), .wfull(full),
+        .wclk(trc_clk), .wrst(trc_rst), .wdata(word), .wen(word_valid), .wfull(full), .wfree(fifo_free),
         .rclk(clk), .rrst(rst), .rdata(f_data), .rvalid(f_valid), .rready(f_ready)
     );
 

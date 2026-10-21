@@ -1,6 +1,9 @@
 // Asynchronous FIFO, Gray-coded pointers through two-flop synchronisers.
-// First-word-fall-through read side; the memory is read asynchronously, so a
-// small depth maps to distributed RAM.
+// First-word-fall-through read side with a registered memory read, so the
+// memory maps to block RAM (or registered distributed RAM when small): every
+// cycle the word at the next read pointer is fetched. A written word becomes
+// visible to the reader only through the two-flop synchroniser, so the fetch
+// that raises rvalid always sees it.
 //
 // Each side has its own synchronous reset; reset both together.
 //
@@ -15,6 +18,7 @@ module async_fifo #(
     input  logic [DW-1:0] wdata,
     input  logic          wen,      // ignored while wfull
     output logic          wfull,
+    output logic [AW:0]   wfree,    // free entries as seen by the writer (may lag, never overstates)
 
     input  logic          rclk,
     input  logic          rrst,
@@ -30,6 +34,10 @@ module async_fifo #(
 
     function automatic logic [AW:0] bin2gray(input logic [AW:0] b);
         bin2gray = b ^ (b >> 1);
+    endfunction
+
+    function automatic logic [AW:0] gray2bin(input logic [AW:0] g);
+        for (int i = 0; i <= AW; i++) gray2bin[i] = ^(g >> i);
     endfunction
 
     // write side
@@ -58,12 +66,16 @@ module async_fifo #(
         end
     end
 
+    assign wfree = (AW+1)'(2**AW) - (wbin - gray2bin(rgray_w2));
+
     // read side
     logic [AW:0] rbin_n;
     logic        rfire;
     assign rfire  = rvalid && rready;
     assign rbin_n = rbin + (AW+1)'(rfire);
-    assign rdata  = mem[rbin[AW-1:0]];
+    always_ff @(posedge rclk) begin
+        rdata <= mem[rbin_n[AW-1:0]];
+    end
 
     always_ff @(posedge rclk) begin
         if (rrst) begin
