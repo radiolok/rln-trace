@@ -10,27 +10,21 @@ CH569 непрерывно отдаёт в bulk EP2 IN блоки с номер�
 
 ## Что откуда
 
-| Файл | Источник |
+| Файл | Что |
 |---|---|
-| `main.c` | `HydraUSB3_USB/User/Main.c`, поменяна только строка версии |
-| `usb/CH56x_usb30_devbulk.c`, `usb/CH56x_usb20_devbulk.c` | форк `wch-ch56x-bsp` 732309a: EP2 IN — источник потока, EP2 OUT пишет в отдельный буфер и отбрасывается. Правки помечены `rln-trace` |
-| `stream.c`, `stream.h` | свои |
-| BSP, дескрипторы, `usb_cmd.c` | из подмодуля без изменений |
+| `main.c` | запуск USB и светодиод статуса ([`../common/app_usb.c`](../common/app_usb.c)) |
+| `ep2_stream.c` | EP2 IN через крючки [`ep2.h`](../common/ep2.h): один буфер блока, перед отправкой переписывается заголовок |
+| `stream.c`, `stream.h` | формат потока |
+| стек USB | общий форк BSP в [`../common/usb/`](../common/usb/) |
+| `usb_cmd.c` | из подмодуля без изменений (LOGR, USBS, USB2, USB3, BOOT) |
 
-Форки и `main.c` остаются под Apache-2.0 (как BSP), свои файлы — BSD-3-Clause.
-
-Файл платы — `hydrausb3_v1.c`: светодиод PB22 (выход), кнопка PB23, перемычка PB24. Проверено на WCH
-CH569 EVT, где эти выводы разведены иначе: USB работает, светодиод и кнопка не проверялись. Перед
-тем как подключать что-то к PB22–PB24 на EVT, нужен свой файл платы.
-
-Устройство остаётся `16c0:05dc` «HydraUSB3» с командами EP1 из примера (LOGR, USBS, USB2, USB3, BOOT).
-Windows ставит WinUSB сама (WCID).
+Устройство остаётся `16c0:05dc` «HydraUSB3». Windows ставит WinUSB сама (WCID).
 
 ## Сборка и запуск
 
 ```sh
-make CROSS=~/.local/opt/xpack-riscv-none-elf-gcc-12.2.0-1/bin/riscv-none-elf-
-wch-ch56x-isp -v -r -f build/usbstream.bin    # плата в загрузчике
+make CROSS=~/.local/opt/xpack-riscv-none-elf-gcc-12.2.0-1/bin/riscv-none-elf-   # BOARD=evt по умолчанию
+make flash                                    # плата в загрузчике
 make -C ../../../sw/usbstream && ../../../sw/usbstream/usbstream -t 60
 ```
 

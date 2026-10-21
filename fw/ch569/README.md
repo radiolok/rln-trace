@@ -10,6 +10,20 @@ git submodule update --init --recursive --depth 1 au/hydrausb3_fw
 | Папка | Что |
 |---|---|
 | [`usbstream/`](usbstream/) | CH569 сам выдаёт поток самопроверки в USB3 bulk EP2 IN, без ПЛИС. Половина шага 0 [плана проверки](../../hw/README.md#9-план-проверки): потолок USB3 → ПК отдельно от HSPI |
+| [`hspi2usb/`](hspi2usb/) | Мост HSPI → USB3 для шага 0: пакеты от ПЛИС (`gw/cores/selftest_hspi.sv`) в EP2 IN; внутренний источник для проверки без ПЛИС |
+| [`common/`](common/) | Общее: форк стека USB из BSP с EP2 IN под приложение ([`ep2.h`](common/ep2.h)), запуск USB и светодиод статуса, слой платы, правила сборки [`app.mk`](common/app.mk) |
+
+## Платы
+
+`make BOARD=evt` (по умолчанию) или `make BOARD=hydrausb3`. Слой платы ([`common/board.h`](common/board.h))
+даёт три логических светодиода: статус USB, активность, ошибка.
+
+| Плата | Светодиоды | Кнопка |
+|---|---|---|
+| WCH CH569W EVT ([`board_evt.c`](common/board/board_evt.c), схема `EVT/PUB/CH569WSCH.pdf` в openwch/ch569) | LED0 зелёный PB24 — статус, LED1 синий PB22 — активность, LED2 жёлтый PB23 — ошибка; горят при низком уровне | нет на GPIO: Download — HD0/PA5 при включении |
+| HydraUSB3 v1 ([`board_hydrausb3.c`](common/board/board_hydrausb3.c)) | ULED PB22 — статус | UBTN PB23 не используется |
+
+Светодиод статуса горит постоянно до перечисления, затем мигает раз в 0,5 с на USB3 и раз в 1 с на USB2.
 
 ## Тулчейн
 

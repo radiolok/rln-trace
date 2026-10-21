@@ -38,15 +38,28 @@ jobs:
           curl -sSL "$XPACK_URL" | tar -xz -C "$RUNNER_TEMP/gcc"
           echo "$RUNNER_TEMP/gcc/$XPACK/bin" >> "$GITHUB_PATH"
 
-      - name: Build usbstream
-        run: make -C fw/ch569/usbstream -j"$(nproc)"
+      # both boards and every HSPI width build; the artifacts are the WCH EVT ones, 8-bit HSPI
+      - name: Build
+        run: |
+          for app in usbstream hspi2usb; do
+            make -C fw/ch569/$app BOARD=hydrausb3 -j"$(nproc)"
+            make -C fw/ch569/$app clean
+          done
+          for w in 16 32; do
+            make -C fw/ch569/hspi2usb HSPI_WIDTH=$w -j"$(nproc)"
+            make -C fw/ch569/hspi2usb clean
+          done
+          make -C fw/ch569/usbstream -j"$(nproc)"
+          make -C fw/ch569/hspi2usb -j"$(nproc)"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ch569-usbstream
+          name: ch569-firmware
           path: |
             fw/ch569/usbstream/build/usbstream.bin
             fw/ch569/usbstream/build/usbstream.elf
+            fw/ch569/hspi2usb/build/hspi2usb.bin
+            fw/ch569/hspi2usb/build/hspi2usb.elf
 
   host:
     runs-on: ubuntu-24.04

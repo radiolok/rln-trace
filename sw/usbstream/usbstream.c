@@ -80,16 +80,47 @@ static void report(const char *tag, double dt, uint64_t dbytes)
 	fflush(stdout);
 }
 
+#define EP_CMD_OUT 0x01
+#define EP_CMD_IN  0x81
+#define CMD_LEN    4096
+#define MAX_CMDS   8
+
+/* EP1 command of the firmware (usb_cmd.c): four letters, read as a little-endian
+ * word whose value spells them from the top byte; the answer is text on EP1 IN */
+static int send_cmd(libusb_device_handle *h, const char *cmd)
+{
+	static uint8_t buf[CMD_LEN];
+	uint32_t v = (uint32_t)cmd[0] << 24 | (uint32_t)cmd[1] << 16 | (uint32_t)cmd[2] << 8 | (uint32_t)cmd[3];
+	int n, r;
+
+	memset(buf, 0, sizeof(buf));
+	memcpy(buf, &v, 4);
+	if((r = libusb_bulk_transfer(h, EP_CMD_OUT, buf, CMD_LEN, &n, 1000))) {
+		fprintf(stderr, "%s: %s\n", cmd, libusb_error_name(r));
+		return -1;
+	}
+	memset(buf, 0, sizeof(buf));
+	if((r = libusb_bulk_transfer(h, EP_CMD_IN, buf, CMD_LEN, &n, 1000))) {
+		fprintf(stderr, "%s, ответ: %s\n", cmd, libusb_error_name(r));
+		return -1;
+	}
+	buf[CMD_LEN - 1] = 0;
+	printf("%s:\n%s%s", cmd, (char *)buf, n && buf[strlen((char *)buf) - 1] == '\n' ? "" : "\n");
+	return 0;
+}
+
 static void usage(const char *argv0)
 {
 	fprintf(stderr,
-		"Использование: %s [-d VID:PID] [-t сек] [-n передач] [-s КиБ] [-o файл]\n"
+		"Использование: %s [-d VID:PID] [-C КОМАНДА]... [-t сек] [-n передач] [-s КиБ] [-o файл]\n"
 		"  -d  устройство, по умолчанию 16c0:05dc\n"
 		"  -t  длительность, 0 — до Ctrl+C (по умолчанию 10)\n"
 		"  -n  передач в очереди (по умолчанию 16)\n"
 		"  -s  размер передачи в КиБ, кратно 4 (по умолчанию 256)\n"
 		"      все передачи вместе не больше usbfs_memory_mb (обычно 16 МБ)\n"
-		"  -o  сохранить сырой поток в файл\n", argv0);
+		"  -o  сохранить сырой поток в файл\n"
+		"  -C  команда EP1 до приёма (до %d): SRCI, SRCH, STAT (hspi2usb), USBS, LOGR;\n"
+		"      без -t после команд приёма нет\n", argv0, MAX_CMDS);
 }
 
 int main(int argc, char **argv)
@@ -98,8 +129,10 @@ int main(int argc, char **argv)
 	double duration = 10;
 	int nxfer = 16, xfer_kib = 256, opt, rc = 2;
 	const char *dump_path = NULL;
+	const char *cmds[MAX_CMDS];
+	int ncmds = 0, t_set = 0;
 
-	while((opt = getopt(argc, argv, "d:t:n:s:o:h")) != -1) {
+	while((opt = getopt(argc, argv, "d:t:n:s:o:C:h")) != -1) {
 		switch(opt) {
 		case 'd':
 			if(sscanf(optarg, "%x:%x", &vid, &pid) != 2) {
@@ -107,7 +140,14 @@ int main(int argc, char **argv)
 				return 2;
 			}
 			break;
-		case 't': duration = atof(optarg); break;
+		case 't': duration = atof(optarg); t_set = 1; break;
+		case 'C':
+			if(strlen(optarg) != 4 || ncmds == MAX_CMDS) {
+				usage(argv[0]);
+				return 2;
+			}
+			cmds[ncmds++] = optarg;
+			break;
 		case 'n': nxfer = atoi(optarg); break;
 		case 's': xfer_kib = atoi(optarg); break;
 		case 'o': dump_path = optarg; break;
@@ -137,6 +177,14 @@ int main(int argc, char **argv)
 		fprintf(stderr, "claim_interface: %s\n", libusb_error_name(r));
 		goto out;
 	}
+	for(int i = 0; i < ncmds; i++)
+		if(send_cmd(h, cmds[i]))
+			goto release;
+	if(ncmds && !t_set) {
+		rc = 0;
+		goto release;
+	}
+
 	printf("%04x:%04x, скорость %s, %d передач по %d КиБ\n", vid, pid,
 	       speed_name(libusb_get_device_speed(libusb_get_device(h))), nxfer, xfer_kib);
 
@@ -203,6 +251,7 @@ int main(int argc, char **argv)
 	for(int i = 0; i < nxfer; i++)
 		if(xfers[i])
 			libusb_free_transfer(xfers[i]); /* буферы освобождает выход из процесса */
+release:
 	libusb_release_interface(h, 0);
 out:
 	if(dump)

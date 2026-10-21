@@ -9,8 +9,8 @@
 * SPDX-License-Identifier: Apache-2.0
 *
 * rln-trace: fork of wch-ch56x-bsp 732309a usb/usb_devbulk/CH56x_usb20_devbulk.c.
-*            EP2 IN is a self-test stream source (stream.h), EP2 OUT is discarded.
-*            Changes are marked "rln-trace".
+*            EP2 IN is fed by the application through ep2.h; EP2 OUT is
+*            discarded. Changes are marked "rln-trace".
 *******************************************************************************/
 #include "CH56x_common.h"
 #include "CH56x_usb20_devbulk.h"
@@ -19,7 +19,7 @@
 #include "CH56x_usb_devbulk_desc_cmd.h"
 
 #include "CH56x_debug_log.h"
-#include "stream.h" // rln-trace
+#include "ep2.h" // rln-trace
 //#define DEBUG_USB2_REQ 1 // Debug USB Req (can have impact real-time to correctly enumerate USB2)
 //#define DEBUG_USB2_EP0 1 // Debug ON EP0 have timing issue with real-time to enumerate USB2
 //#define DEBUG_USB2_EPX 1 // EPX is EP1 to EP7
@@ -95,8 +95,6 @@ void USB20_Endp_Init(void)
 	R32_UEP2_TX_DMA = (uint32_t)(uint8_t *)endp2RTbuff;
 	R32_UEP2_RX_DMA = (uint32_t)(uint8_t *)endp2Rbuff; // rln-trace
 
-	stream_start(endp2RTbuff, U20_MAXPACKET_LEN); // rln-trace
-
 	R16_UEP0_T_LEN = 0;
 	R8_UEP0_TX_CTRL = 0;
 	R8_UEP0_RX_CTRL = 0;
@@ -105,8 +103,8 @@ void USB20_Endp_Init(void)
 	R8_UEP1_TX_CTRL = UEP_T_RES_ACK | RB_UEP_T_TOG_0;
 	R8_UEP1_RX_CTRL = UEP_R_RES_ACK | RB_UEP_R_TOG_0;
 
-	R16_UEP2_T_LEN = U20_MAXPACKET_LEN;
-	R8_UEP2_TX_CTRL = UEP_T_RES_ACK | RB_UEP_T_TOG_0;
+	R16_UEP2_T_LEN = 0;
+	R8_UEP2_TX_CTRL = UEP_T_RES_NAK | RB_UEP_T_TOG_0; // rln-trace: NAK until the application sends
 	R8_UEP2_RX_CTRL = UEP_R_RES_ACK | RB_UEP_R_TOG_0;
 
 	R16_UEP3_T_LEN = 0;
@@ -128,6 +126,22 @@ void USB20_Endp_Init(void)
 	R16_UEP7_T_LEN = 0;
 	R8_UEP7_TX_CTRL = UEP_T_RES_NAK;
 	R8_UEP7_RX_CTRL = UEP_R_RES_NAK;
+
+	ep2_hs_ready(); // rln-trace
+}
+
+/*******************************************************************************
+ * @fn     ep2_hs_send
+ *
+ * @brief  rln-trace: arm USB2 EP2 IN with one packet of 1..512 bytes (see ep2.h)
+ *
+ * @return None
+ */
+void ep2_hs_send(const uint8_t *buf, uint32_t len)
+{
+	R32_UEP2_TX_DMA = (uint32_t)buf;
+	R16_UEP2_T_LEN = (uint16_t)len;
+	R8_UEP2_TX_CTRL = (R8_UEP2_TX_CTRL & ~RB_UEP_TRES_MASK) | UEP_T_RES_ACK;
 }
 /*******************************************************************************
  * @fn     USB20_Device_Init
@@ -702,14 +716,11 @@ __attribute__((interrupt("WCH-Interrupt-fast"))) void USBHS_IRQHandler(void)
 #endif
 				if(rx_token == PID_IN)
 				{
-					stream_next(endp2RTbuff, U20_MAXPACKET_LEN); // rln-trace: packet sent, header of the next one
 					// Flip the synchronization trigger bit to be sent next time bulk transfer data0 data1 flip back and forth
-					R32_UEP2_TX_DMA = (uint32_t)(uint8_t *)endp2RTbuff;
 					R8_UEP2_TX_CTRL ^= RB_UEP_T_TOG_1;
-
-					// The endpoint status is set to ACK, if the transmission length remains unchanged,
-					// there is no need to rewrite the R16_UEP2_T_LEN register
-					R8_UEP2_TX_CTRL = (R8_UEP2_TX_CTRL & ~RB_UEP_TRES_MASK) | UEP_T_RES_ACK;
+					// rln-trace: NAK until the application arms the next packet
+					R8_UEP2_TX_CTRL = (R8_UEP2_TX_CTRL & ~RB_UEP_TRES_MASK) | UEP_T_RES_NAK;
+					ep2_hs_done();
 				}
 				else if(rx_token == PID_OUT)
 				{

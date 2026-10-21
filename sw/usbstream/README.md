@@ -9,6 +9,7 @@ make            # ./usbstream
 make test       # тест разбора на синтетическом потоке, устройство не нужно
 ./usbstream -t 60               # 60 с, итог и код возврата
 ./usbstream -t 0 -o dump.bin    # до Ctrl+C, сырой поток в файл
+./usbstream -C SRCI -t 10 -C STAT   # команды EP1 прошивке (hspi2usb), приём, снова команды
 ```
 
 | Счётчик | Что значит |

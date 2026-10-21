@@ -9,8 +9,8 @@
 * SPDX-License-Identifier: Apache-2.0
 *
 * rln-trace: fork of wch-ch56x-bsp 732309a usb/usb_devbulk/CH56x_usb30_devbulk.c.
-*            EP2 IN is a self-test stream source (stream.h), EP2 OUT is discarded
-*            into its own buffer. Changes are marked "rln-trace".
+*            EP2 IN is fed by the application through ep2.h; EP2 OUT is
+*            discarded into its own buffer. Changes are marked "rln-trace".
 *******************************************************************************/
 #include "CH56x_common.h"
 #include "CH56x_debug_log.h"
@@ -20,7 +20,7 @@
 #include "CH56x_usb30_devbulk_LIB.h"
 #include "CH56x_usb_devbulk_desc_cmd.h"
 
-#include "stream.h" // rln-trace
+#include "ep2.h" // rln-trace
 
 //#define DEBUG_USB3_REQ 1 // Debug USB Req (have impact on real-time to correctly enumerate USB 3.0..)
 //#define DEBUG_USB3_EP0 1 // Debug EP0 (have impact on real-time to correctly enumerate USB 3.0..)
@@ -41,8 +41,9 @@ __attribute__((aligned(16))) uint8_t endp0RTbuff[512] __attribute__((section(".D
 __attribute__((aligned(16))) uint8_t endp1Rbuff[DEF_ENDP1_MAX_SIZE] __attribute__((section(".DMADATA"))); // Endpoint 1 data Receive buffer
 __attribute__((aligned(16))) uint8_t endp1Tbuff[DEF_ENDP1_MAX_SIZE] __attribute__((section(".DMADATA"))); // Endpoint 1 data Transmit buffer
 __attribute__((aligned(16))) uint8_t endp2RTbuff[DEF_ENDP2_MAX_SIZE] __attribute__((section(".DMADATA"))); // Endpoint 2 data transceiver buffer
-// rln-trace: endp2RTbuff holds the stream for EP2 IN only, EP2 OUT data lands here and is dropped
+// rln-trace: EP2 IN sends application buffers, EP2 OUT data lands here and is dropped
 __attribute__((aligned(16))) uint8_t endp2Rbuff[DEF_ENDP2_MAX_SIZE] __attribute__((section(".DMADATA")));
+static uint16_t ep2_last_len = 1024; // rln-trace: length of the last packet of the armed burst
 
 /*******************************************************************************
  * @fn     USB3_force
@@ -115,13 +116,11 @@ void USB30D_init(FunctionalState sta)
 		USBSS->UEP1_RX_DMA = (uint32_t)(uint8_t *)endp1Rbuff;
 		USBSS->UEP2_RX_DMA = (uint32_t)(uint8_t *)endp2Rbuff; // rln-trace
 
-		stream_start(endp2RTbuff, DEF_ENDP2_MAX_SIZE); // rln-trace
-
 		USB30_OUT_set(ENDP_1, ACK, DEF_ENDP1_OUT_BURST_LEVEL); // endpoint1 receive setting
 		USB30_OUT_set(ENDP_2, ACK, DEF_ENDP2_OUT_BURST_LEVEL); // endpoint2 receive setting
 
 		USB30_IN_set(ENDP_1, ENABLE, ACK, DEF_ENDP1_IN_BURST_LEVEL, 1024); // endpoint1 send setting
-		USB30_IN_set(ENDP_2, ENABLE, ACK, DEF_ENDP2_IN_BURST_LEVEL, 1024); // endpoint2 send setting
+		ep2_ss_ready(); // rln-trace: EP2 IN stays not ready until the application sends
 	}
 	else
 	{
@@ -633,12 +632,9 @@ void EP2_IN_Callback(void)
 #endif
 	if(nump == 0)
 	{
-		// All sent
-		stream_next(endp2RTbuff, DEF_ENDP2_MAX_SIZE); // rln-trace: buffer is free, header of the next block
-		USBSS->UEP2_TX_DMA = (uint32_t)(uint8_t *)endp2RTbuff; // Burst transfer DMA address offset Need to reset
+		// All sent: rln-trace: the application arms the next one, or leaves it not ready
 		USB30_IN_clearIT(ENDP_2); // Clear endpoint state Keep only packet sequence number
-		USB30_IN_set(ENDP_2, ENABLE, ACK, DEF_ENDP2_IN_BURST_LEVEL, 1024); // Set the endpoint to be able to receive DEF_ENDP2_IN_BURST_LEVEL packets
-		USB30_send_ERDY(ENDP_2 | IN, DEF_ENDP2_IN_BURST_LEVEL); // Notify the host to send DEF_ENDP2_IN_BURST_LEVEL packets
+		ep2_ss_done();
 	}
 	else
 	{
@@ -647,9 +643,27 @@ void EP2_IN_Callback(void)
 		// There is still nump packet left to be sent; during the burst process, the host may not be able to take all the data packets at one time.
 		// Therefore, it is necessary to determine the current number of remaining packets and notify the host of how many packets are left to be taken.
 		USB30_IN_clearIT(ENDP_2); // Clear endpoint state Keep only packet sequence number
-		USB30_IN_set(ENDP_2, ENABLE, ACK, nump, 1024); // Able to send nump packet
+		USB30_IN_set(ENDP_2, ENABLE, ACK, nump, ep2_last_len); // Able to send nump packet; rln-trace: last length
 		USB30_send_ERDY(ENDP_2 | IN, nump);
 	}
+}
+
+/*******************************************************************************
+ * @fn     ep2_ss_send
+ *
+ * @brief  rln-trace: arm USB3 EP2 IN with 1..4096 bytes (see ep2.h)
+ *
+ * @return None
+ */
+void ep2_ss_send(const uint8_t *buf, uint32_t len)
+{
+	uint8_t nump = (uint8_t)((len + 1023) / 1024);
+
+	ep2_last_len = (uint16_t)(len - (uint32_t)(nump - 1) * 1024);
+	USBSS->UEP2_TX_DMA = (uint32_t)buf;
+	USB30_IN_clearIT(ENDP_2);
+	USB30_IN_set(ENDP_2, ENABLE, ACK, nump, ep2_last_len);
+	USB30_send_ERDY(ENDP_2 | IN, nump);
 }
 
 /*******************************************************************************
