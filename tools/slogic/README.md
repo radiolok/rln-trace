@@ -40,6 +40,7 @@ python3 tools/slogic/slogic_dfu.py id
 python3 tools/slogic/slogic_dfu.py dump slogic16u3-factory.bin
 python3 tools/slogic/slogic_dfu.py write образ.bin --backup slogic16u3-factory.bin
 python3 tools/slogic/slogic_dfu.py restore slogic16u3-factory.bin
+python3 tools/slogic/slogic_dfu.py --ftdi ftdi://ftdi:2232h/1 id   # флеш напрямую, FT2232H (pyftdi)
 ```
 
 `write` и `restore` стирают всю область `0x000000..0x7fffff`, пишут, сверяют. В `0x800000` и выше
@@ -77,9 +78,16 @@ python3 tools/slogic/slogic_dfu.py restore slogic16u3-factory.bin
 Вывод: свой открытый битстрим на SLogic16U3 работает, выход в DFU — кнопкой MODE, восстановление —
 `restore` из дампа. JTAG ПЛИС для этого не нужен.
 
-## Дальше
+## Прозвонка выводов
 
-Разводки нет, у пустого образа нет канала наружу. Следующий образ — прозвонка выводов: найти
-выводы индикатора и мигать им номером вывода ПЛИС, на котором пришёл меандр от Tang Nano 9K
-(провода на гребёнку SLogic, входы через компараторы с порогом). В образе только входы и
-индикатор, multiboot на `0x800000` обязателен.
+Образ-прозвонка, источник сигналов на STM32F4-Discovery и разбор отчёта — [`pinmap/`](pinmap/).
+
+**2026-10-21: после записи `pinmap.bin` прибор не возвращается в DFU** (USB2 не поднимается, Windows
+видит `0000:0002`). Отчёт не прочитан. Следующий шаг — вскрыть прибор и читать флеш напрямую через
+FT2232H: `slogic_dfu.py --ftdi ftdi://ftdi:2232h/1 …` (pyftdi), план — в
+[`pinmap/README.md`](pinmap/README.md#восстановление-следующий-шаг).
+
+Урок для своих образов: до записи нужен путь восстановления, не зависящий от DFU (JTAG ПЛИС или
+доступ к флеш), а подтяжки на неизвестных выводах могут помешать USB-части прибора.
+
+Доступ без root к прибору (приложение и DFU) — правило в [`sw/udev/50-rln-trace.rules`](../../sw/udev/50-rln-trace.rules).

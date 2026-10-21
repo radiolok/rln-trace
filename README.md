@@ -69,6 +69,7 @@ git submodule update --init --depth 1
 - [ ] Первая трасса с STM32F407 (ITM, затем ETM)
 - [ ] Метки PPS
 - [x] Направление A: флеш через DFU, свой открытый битстрим загружается ([tools/slogic](tools/slogic/))
+- [ ] Направление A: вернуть SLogic16U3 после прозвонки (флеш напрямую через FT2232H, [tools/slogic/pinmap](tools/slogic/pinmap/))
 - [ ] Направление A: разводка выводов SLogic16U3, приём трассы
 
 ## Лицензии

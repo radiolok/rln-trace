@@ -19,6 +19,9 @@ ID и UID флеш, дамп, карта занятых блоков 64 КиБ, 
 образ по 0x0 не прошёл проверку (UG704, 3.6.3). Запись в область от 0x800000
 утилита не делает никогда — это единственный путь восстановления без JTAG.
 
+С --ftdi URL те же команды идут к флеш напрямую через FT2232H (MPSSE,
+pyftdi) — для вскрытого прибора, когда DFU недоступен.
+
 Нужен pyusb (pip install pyusb) и доступ к 359f:30f1 (udev-правило из
 README прошивальщика). Вход в DFU: кнопка MODE, индикатор мигает красным.
 """
@@ -29,8 +32,11 @@ import struct
 import sys
 import time
 
-import usb.core
-import usb.util
+try:
+    import usb.core
+    import usb.util
+except ImportError:  # для --ftdi pyusb не нужен
+    usb = None
 
 VID, PID_DFU = 0x359F, 0x30F1
 
@@ -135,7 +141,32 @@ class Bridge:
         return data
 
 
-def open_flash():
+class FtdiBridge:
+    """Флеш напрямую через FT2232H (MPSSE, канал A): ADBUS0 SCK, ADBUS1 MOSI,
+    ADBUS2 MISO, ADBUS3 CS#. Для вскрытого прибора, когда DFU недоступен."""
+
+    def __init__(self, url, freq=1e6):
+        from pyftdi.spi import SpiController
+        self.ctrl = SpiController()
+        self.ctrl.configure(url)
+        self.port = self.ctrl.get_port(cs=0, freq=freq, mode=0)
+
+    def reset(self):
+        pass
+
+    def xfer(self, wr, rd_n=0, dummy=0):
+        return bytes(self.port.exchange(bytes(wr) + b"\x00" * dummy, rd_n))
+
+
+def open_flash(ftdi=None):
+    if ftdi:
+        b = FtdiBridge(ftdi)
+        jid = b.xfer(b"\x9f", 3)
+        if jid in (b"\xff\xff\xff", b"\x00\x00\x00"):
+            sys.exit(f"флеш не отвечает (JEDEC ID {jid.hex()}): проводка, питание, ПЛИС держит шину?")
+        uid = b.xfer(b"\x4b", 16, 4)
+        cap = 2 ** jid[2] if 16 <= jid[2] <= 28 else 0
+        return b, jid, uid, cap
     dev = usb.core.find(idVendor=VID, idProduct=PID_DFU)
     if dev is None:
         sys.exit("нет 359f:30f1: переведите прибор в DFU кнопкой MODE (мигает красным)")
@@ -265,9 +296,13 @@ def main():
     w.add_argument("--backup", required=True, help="полный дамп этого прибора (dump)")
     r = sub.add_parser("restore", help="вернуть заводское приложение из полного дампа")
     r.add_argument("backup")
+    ap.add_argument("--ftdi", metavar="URL", help="флеш напрямую через FT2232H, например ftdi://ftdi:2232h/1")
     a = ap.parse_args()
 
-    b, jid, uid, cap = open_flash()
+    if a.ftdi:  # ограничения FIFO моста DFU к FT2232H не относятся
+        global READ_CHUNK, WRITE_CHUNK
+        READ_CHUNK, WRITE_CHUNK = 4096, PAGE
+    b, jid, uid, cap = open_flash(a.ftdi)
     print(f"JEDEC ID {jid.hex()}  UID {uid.hex()}  объём {cap // 1024} КиБ" if cap else
           f"JEDEC ID {jid.hex()}  UID {uid.hex()}  объём не опознан")
     if a.cmd == "id":

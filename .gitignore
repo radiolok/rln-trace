@@ -16,3 +16,4 @@ target/
 *.orig-*.png
 # дампы флеш приборов (образы производителя)
 *-factory.bin
+tools/slogic/pinmap/stm32/pattern.elf

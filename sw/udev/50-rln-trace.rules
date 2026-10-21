@@ -4,3 +4,5 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="4348", ATTRS{idProduct}=="55e0", MODE="0666"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55e0", MODE="0666"
 # fw/ch569/usbstream (VID:PID HydraUSB3 по умолчанию, общий для libusb-устройств V-USB)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="05dc", MODE="0666"
+# Sipeed SLogic16U3: приложение (3031) и DFU (30f1) — tools/slogic
+SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", MODE="0666"
