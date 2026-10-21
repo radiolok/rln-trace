@@ -1,0 +1,7 @@
+// Clocks of top_step0 for Gowin EDA (nextpnr uses clocks.py).
+create_clock -name clk27 -period 37.037 -waveform {0 18.518} [get_ports {clk27}]
+create_generated_clock -name clk -source [get_ports {clk27}] -multiply_by 20 -divide_by 9 [get_pins {u_pll/CLKOUT}]
+// CH569 HTCLK = its Fsys, up to 120 MHz
+create_clock -name htclk -period 8.333 -waveform {0 4.166} [get_ports {htclk}]
+// clk and htclk meet only through the async FIFO and two-flop synchronisers
+set_clock_groups -asynchronous -group [get_clocks {clk clk27}] -group [get_clocks {htclk}]

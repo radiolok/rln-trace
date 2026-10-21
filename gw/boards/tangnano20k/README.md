@@ -53,11 +53,22 @@ make -C gw board-lint                    # Verilator, модели примит�
 make -C gw board-synth                   # Yosys synth_gowin (так и в CI)
 make -C gw board-pnr OSS=~/.local/opt/oss-cad-suite/bin/   # nextpnr-himbaechel + gowin_pack -> .fs
 openFPGALoader -b tangnano20k gw/build/tangnano20k/top_step0.fs    # в SRAM; -f — во флеш
+make -C gw board-gowin                   # Gowin EDA под Windows из WSL (gw_sh.exe, GW_SH=...)
 ```
+
+`board-gowin` копирует исходники, `tangnano20k.cst`, [`top_step0.sdc`](top_step0.sdc) и
+[`gowin.tcl`](gowin.tcl) во временный каталог Windows, запускает `gw_sh` и забирает отчёты и
+битстрим в `gw/build/tangnano20k/gowin/pnr/`. Нужна установленная Gowin EDA с действующей лицензией
+(бесплатную выдаёт Gowin по запросу на сайте). Путь — переменная `GW_SH`.
 
 | Дата | Тулчейн | LUT4 | ALU | DFF | BSRAM | Fmax clk / HTCLK |
 |---|---|---|---|---|---|---|
 | 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 (OSS CAD Suite 2026-10-20) | 1022 (4 %) | 354 | 539 | 1 | 135 / 149 МГц (нужно 60 / 120) |
+| 2026-10-21 | Gowin EDA 1.9.12.04 | 572 LUT | 203 | 533 | 1 | 112 / 170 МГц |
+
+Оценки Fmax у nextpnr заметно оптимистичнее, для подписи по таймингам надёжнее Gowin. Он же нашёл
+узкое место HTCLK: свободное место FIFO `hspi_rx` (перевод указателя из кода Грея, вычитание,
+сравнение) — 131 МГц при нужных 120; после регистра на `wfree` в `async_fifo` — 170 МГц.
 
 Запас по `clk` позволяет поднять HRCLK до 96–99 МГц (`PLL_*`, расчёт — `gowin_pll` из OSS CAD Suite).
 Сравнение с Gowin EDA — когда он будет поставлен.

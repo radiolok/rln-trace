@@ -16,6 +16,7 @@ make -C gw test     # все тестбенчи
 make -C gw synth    # yosys synth_gowin, отчёт о ресурсах в gw/build/synth/
 make -C gw board-synth                               # Tang Nano 20K, шаг 0
 make -C gw board-pnr OSS=~/.local/opt/oss-cad-suite/bin/   # битстрим (nextpnr-himbaechel)
+make -C gw board-gowin                               # то же в Gowin EDA (Windows, из WSL)
 ```
 
 Нужны Verilator 5 и Yosys с `synth_gowin`. Локально — Verilator 5.034 и Yosys 0.51, в CI — пакеты

@@ -130,7 +130,23 @@ $(TN20K_OUT)/top_step0.fs: $(TN20K_OUT)/top_step0.json $(TN20K)/tangnano20k.cst 
 	@grep -E 'Max frequency' $(TN20K_OUT)/pnr.log | tail -n 2
 	@grep -P '^Info: \t +(LUT4|ALU|DFF|BSRAM|IOB|rPLL|IOLOGICO):' $(TN20K_OUT)/pnr.log
 
+# Gowin EDA on the Windows side of WSL (gw_sh.exe): a copy of the sources in a
+# Windows temp folder, reports and the bitstream back to $(TN20K_OUT)/gowin.
+GW_SH      ?= /mnt/c/gowin/Gowin_V1.9.12.04_x64/IDE/bin/gw_sh.exe
+GOWIN_WORK ?= $(shell wslpath -u "$$(cmd.exe /c 'echo %TEMP%' 2>/dev/null | tr -d '\r')" 2>/dev/null)/rln-trace-gowin
+
+board-gowin: $(STEP0_SRCS) $(TN20K)/tangnano20k.cst $(TN20K)/top_step0.sdc $(TN20K)/gowin.tcl
+	@test -x "$(GW_SH)" || { echo "no Gowin EDA at $(GW_SH)"; exit 1; }
+	rm -rf "$(GOWIN_WORK)" && mkdir -p "$(GOWIN_WORK)/src"
+	cp $(STEP0_SRCS) $(TN20K)/tangnano20k.cst $(TN20K)/top_step0.sdc "$(GOWIN_WORK)/src/"
+	cp $(TN20K)/gowin.tcl "$(GOWIN_WORK)/"
+	cd "$(GOWIN_WORK)" && "$(GW_SH)" gowin.tcl > gw_sh.log 2>&1; tail -n 5 "$(GOWIN_WORK)/gw_sh.log"
+	@mkdir -p $(TN20K_OUT)/gowin
+	cp "$(GOWIN_WORK)/gw_sh.log" $(TN20K_OUT)/gowin/
+	cp -r "$(GOWIN_WORK)/impl/." $(TN20K_OUT)/gowin/ 2>/dev/null || true
+	@test -f $(TN20K_OUT)/gowin/pnr/top_step0.fs || { echo "Gowin: no bitstream, see $(TN20K_OUT)/gowin/gw_sh.log"; exit 1; }
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all lint test crc-check synth board-lint board-synth board-pnr clean
+.PHONY: all lint test crc-check synth board-lint board-synth board-pnr board-gowin clean

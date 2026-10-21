@@ -18,7 +18,7 @@ module async_fifo #(
     input  logic [DW-1:0] wdata,
     input  logic          wen,      // ignored while wfull
     output logic          wfull,
-    output logic [AW:0]   wfree,    // free entries as seen by the writer (may lag, never overstates)
+    output logic [AW:0]   wfree,    // free entries as seen by the writer, registered (lags, never overstates)
 
     input  logic          rclk,
     input  logic          rrst,
@@ -55,18 +55,18 @@ module async_fifo #(
             wbin     <= '0;
             wgray    <= '0;
             wfull    <= 1'b0;
+            wfree    <= (AW+1)'(2**AW);
             rgray_w1 <= '0;
             rgray_w2 <= '0;
         end else begin
             wbin     <= wbin_n;
             wgray    <= bin2gray(wbin_n);
             wfull    <= bin2gray(wbin_n) == {~rgray_w2[AW:AW-1], rgray_w2[AW-2:0]};
+            wfree    <= (AW+1)'(2**AW) - (wbin_n - gray2bin(rgray_w2));
             rgray_w1 <= rgray;
             rgray_w2 <= rgray_w1;
         end
     end
-
-    assign wfree = (AW+1)'(2**AW) - (wbin - gray2bin(rgray_w2));
 
     // read side
     logic [AW:0] rbin_n;
