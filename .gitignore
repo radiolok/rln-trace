@@ -14,3 +14,5 @@ target/
 # WCH figures for checking redrawn diagrams (tools/diagrams/uhsif_originals.py)
 *.orig.png
 *.orig-*.png
+# дампы флеш приборов (образы производителя)
+*-factory.bin

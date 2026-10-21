@@ -7,10 +7,17 @@
 пакет [u32 команда][u32 длина][данные], блок из десяти регистров u32
 SPI-мастера (раскладка как у ATCSPI200).
 
-Утилита только читает: ID и UID флеш, дамп, карта занятых блоков 64 КиБ.
+ID и UID флеш, дамп, карта занятых блоков 64 КиБ, запись основного образа.
 
     python3 tools/slogic/slogic_dfu.py id
     python3 tools/slogic/slogic_dfu.py dump slogic16u3-factory.bin
+    python3 tools/slogic/slogic_dfu.py write probe.bin --backup slogic16u3-factory.bin
+    python3 tools/slogic/slogic_dfu.py restore slogic16u3-factory.bin
+
+Раскладка флеш (16 МиБ): 0x000000 — приложение (первая загрузка ПЛИС),
+0x800000 — золотой образ, он же загрузчик DFU: GW5A грузит его сам, если
+образ по 0x0 не прошёл проверку (UG704, 3.6.3). Запись в область от 0x800000
+утилита не делает никогда — это единственный путь восстановления без JTAG.
 
 Нужен pyusb (pip install pyusb) и доступ к 359f:30f1 (udev-правило из
 README прошивальщика). Вход в DFU: кнопка MODE, индикатор мигает красным.
@@ -39,7 +46,10 @@ MODE_WRITE_READ, MODE_WRITE_ONLY, MODE_READ_ONLY = 0x3, 0x1, 0x2
 MODE_WRITE_DUMMY_READ, MODE_NO_DATA = 0x5, 0x7
 
 READ_CHUNK = 64  # как у прошивальщика для 16U3; FIFO моста маленький
+WRITE_CHUNK = 12  # у 16U3 FIFO моста сбоит уже на 16 байтах (devices.js)
 BLOCK = 0x10000
+PAGE = 0x100
+GOLDEN = 0x800000
 
 
 def default_regs():
@@ -159,6 +169,75 @@ def read(b, addr, n):
     return bytes(out)
 
 
+def wait_wip(b, timeout_s=5.0):
+    t0 = time.time()
+    while True:
+        sr = b.xfer(b"\x05", 1)[0]
+        if sr == 0xFF:
+            raise IOError("статус флеш 0xFF: шина SPI не отвечает")
+        if not sr & 1:
+            return
+        if time.time() - t0 > timeout_s:
+            raise IOError("флеш не закончила запись вовремя")
+
+
+def with_wren(b, op):
+    b.xfer(b"\x06")
+    try:
+        op()
+    except Exception:
+        b.xfer(b"\x04")
+        raise
+    wait_wip(b)
+    b.xfer(b"\x04")
+
+
+def a24(a):
+    return bytes([a >> 16 & 0xFF, a >> 8 & 0xFF, a & 0xFF])
+
+
+def write_main(b, img):
+    """Стереть всю основную область, записать и сверить img с адреса 0x0.
+
+    Стирается всё до 0x800000, а не только место под img: иначе за коротким
+    образом останется хвост прежнего."""
+    if not 0 < len(img) <= GOLDEN:
+        sys.exit(f"образ {len(img)} байт не помещается в 0x000000..0x{GOLDEN:06x}")
+    blocks = GOLDEN // BLOCK
+    for i in range(blocks):
+        print(f"\r  стирание {i + 1}/{blocks}", end="", file=sys.stderr)
+        with_wren(b, lambda: b.xfer(b"\xd8" + a24(i * BLOCK)))
+    print(file=sys.stderr)
+    if read(b, 0, len(img)).count(0xFF) != len(img):
+        sys.exit("после стирания флеш не чистая")
+    done, t0 = 0, time.time()
+    while done < len(img):
+        need = min(WRITE_CHUNK, PAGE - (done & 0xFF), len(img) - done)
+        chunk = img[done:done + need]
+        if chunk.count(0xFF) != need:
+            with_wren(b, lambda: b.xfer(b"\x02" + a24(done) + chunk))
+        done += need
+        if done % 0x4000 < need or done == len(img):
+            rate = done / max(time.time() - t0, 1e-3) / 1024
+            print(f"\r  запись 0x{done:06x}/0x{len(img):06x}  {rate:.0f} КиБ/с", end="", file=sys.stderr)
+    print(file=sys.stderr)
+    back = read(b, 0, len(img))
+    if back != img:
+        diff = next(i for i in range(len(img)) if back[i] != img[i])
+        sys.exit(f"сверка не прошла: первое расхождение по 0x{diff:06x}")
+    print(f"записано и сверено {len(img)} байт с 0x000000")
+
+
+def check_golden(b, backup):
+    """Золотой образ во флеш должен совпадать с бэкапом: бэкап именно этого прибора."""
+    gold = backup[GOLDEN:]
+    end = len(gold.rstrip(b"\xff"))
+    if end == 0:
+        sys.exit("в бэкапе нет золотого образа по 0x800000")
+    if read(b, GOLDEN, end) != gold[:end]:
+        sys.exit("золотой образ во флеш не совпадает с бэкапом: бэкап не от этого прибора?")
+
+
 def block_map(img):
     """Занятые блоки 64 КиБ: (начало, конец, байт не 0xFF)."""
     runs, start = [], None
@@ -181,12 +260,30 @@ def main():
     d = sub.add_parser("dump", help="прочитать флеш в файл")
     d.add_argument("out")
     d.add_argument("--size", type=lambda s: int(s, 0), help="сколько байт (по умолчанию весь объём)")
+    w = sub.add_parser("write", help="записать образ с 0x0 (золотой образ не трогается)")
+    w.add_argument("image")
+    w.add_argument("--backup", required=True, help="полный дамп этого прибора (dump)")
+    r = sub.add_parser("restore", help="вернуть заводское приложение из полного дампа")
+    r.add_argument("backup")
     a = ap.parse_args()
 
     b, jid, uid, cap = open_flash()
     print(f"JEDEC ID {jid.hex()}  UID {uid.hex()}  объём {cap // 1024} КиБ" if cap else
           f"JEDEC ID {jid.hex()}  UID {uid.hex()}  объём не опознан")
     if a.cmd == "id":
+        return
+    if a.cmd in ("write", "restore"):
+        backup = open(a.backup, "rb").read()
+        if len(backup) != cap:
+            sys.exit(f"бэкап {len(backup)} байт, а флеш {cap}: нужен полный дамп")
+        check_golden(b, backup)
+        if a.cmd == "write":
+            img = open(a.image, "rb").read()
+        else:
+            app = backup[:GOLDEN]
+            img = app[:len(app.rstrip(b"\xff"))]
+        write_main(b, img)
+        print("переподключите прибор (по питанию)")
         return
     size = a.size or cap
     if not size:
