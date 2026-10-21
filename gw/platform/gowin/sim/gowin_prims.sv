@@ -9,7 +9,7 @@
 
 module rPLL #(
     parameter FCLKIN = "100.0", parameter IDIV_SEL = 0, parameter FBDIV_SEL = 0, parameter ODIV_SEL = 8,
-    parameter DEVICE = "GW2AR-18C"
+    parameter PSDA_SEL = "0000", parameter DEVICE = "GW2AR-18C"
 ) (
     output logic CLKOUT, output logic CLKOUTP, output logic CLKOUTD, output logic CLKOUTD3,
     output logic LOCK,

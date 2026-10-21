@@ -16,16 +16,18 @@ TRACE_SRCS := $(TPIU_SRCS) cores/trace_capture.sv cores/async_fifo.sv cores/trac
 HSPIRX_SRCS := cores/async_fifo.sv cores/hspi_rx.sv
 UART_SRCS  := cores/uart_tx.sv cores/uart_hex.sv cores/uart_status.sv cores/uart_mux.sv
 STEP0_SRCS := $(HSPI_SRCS) $(HSPIRX_SRCS) $(UART_SRCS) boards/tangnano20k/top_step0.sv
+GEN_SRCS   := cores/tpiu_tx.sv cores/uart_tx.sv cores/uart_status.sv boards/tangnano9k/top_gen.sv
 GOWIN_SIM  := platform/gowin/sim/gowin_prims.sv
 
 TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx
-TESTS := tpiu trace hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
+TESTS := tpiu trace loop hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
 
 srcs_tpiu_rx       := $(TPIU_SRCS)
 srcs_selftest_hspi := $(HSPI_SRCS)
 srcs_trace_rx      := $(TRACE_SRCS)
 srcs_hspi_rx       := $(HSPIRX_SRCS)
 srcs_uart_hex_top  := $(UART_SRCS) test/uart/uart_hex_top.sv
+srcs_tpiu_loop_top := $(TRACE_SRCS) cores/tpiu_tx.sv test/loop/tpiu_loop_top.sv
 
 # test -> top, testbench, extra sources, verilator -G and C++ -D for the build
 top_tpiu := tpiu_rx
@@ -33,6 +35,8 @@ tb_tpiu  := test/tpiu/tb_tpiu.cpp
 top_trace := trace_rx
 tb_trace  := test/trace/tb_trace.cpp
 top_uart  := uart_hex_top
+top_loop  := tpiu_loop_top
+tb_loop   := test/loop/tb_loop.cpp
 tb_uart   := test/uart/tb_uart.cpp
 
 define hspi_test
@@ -67,7 +71,7 @@ CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
 .SECONDEXPANSION:
 .SECONDARY:
 
-all: lint test crc-check synth board-lint board-synth
+all: lint test crc-check synth board-lint board-synth board9k-lint board9k-synth
 
 lint: $(addprefix lint-,$(TOPS))
 lint-%:
@@ -122,14 +126,14 @@ board-lint:
 	    --top-module top_step0 -GCLK_MHZ=$$f $(GOWIN_SIM) $(STEP0_SRCS) || exit 1; done
 
 board-synth: $(TN20K_OUT)/top_step0.json
-$(TN20K_OUT)/top_step0.json: $(STEP0_SRCS) $(TN20K_OUT)/mhz-$(TN20K_MHZ)
+$(TN20K_OUT)/top_step0.json: $(STEP0_SRCS) $(TN20K_OUT)/mhz
 	@mkdir -p $(TN20K_OUT)
 	$(BOARD_YOSYS) -l $(TN20K_OUT)/synth.log -p 'read_verilog -sv $(STEP0_SRCS); chparam -set CLK_MHZ $(TN20K_MHZ) top_step0; synth_gowin -top top_step0 -json $@; stat' > /dev/null
 	@echo "== top_step0"; tail -n 45 $(TN20K_OUT)/synth.log | grep -E '$(STAT_RE)' || true
 
-# a stamp per CLK_MHZ, so changing TN20K_MHZ rebuilds
-$(TN20K_OUT)/mhz-%:
-	@mkdir -p $(TN20K_OUT) && rm -f $(TN20K_OUT)/mhz-* && touch $@
+# the clock choice in a file rewritten only when it changes: a new TN20K_MHZ rebuilds
+$(TN20K_OUT)/mhz: FORCE
+	@mkdir -p $(@D); echo $(TN20K_MHZ) | cmp -s - $@ || echo $(TN20K_MHZ) > $@
 
 board-pnr: $(TN20K_OUT)/top_step0.fs
 $(TN20K_OUT)/top_step0.fs: $(TN20K_OUT)/top_step0.json $(TN20K)/tangnano20k.cst $(TN20K)/clocks.py
@@ -140,6 +144,34 @@ $(TN20K_OUT)/top_step0.fs: $(TN20K_OUT)/top_step0.json $(TN20K)/tangnano20k.cst 
 	$(GOWIN_PACK) -d GW2A-18C -o $@ $(TN20K_OUT)/top_step0_pnr.json
 	@grep -E 'Max frequency' $(TN20K_OUT)/pnr.log | tail -n 2
 	@grep -P '^Info: \t +(LUT4|ALU|DFF|BSRAM|IOB|rPLL|IOLOGICO):' $(TN20K_OUT)/pnr.log
+
+# Tang Nano 9K, bench signal source (top_gen): TRACECLK 12 (jumper wires), 24 or 84 MHz
+TN9K       := boards/tangnano9k
+TN9K_OUT   := $(BUILD)/tangnano9k
+TN9K_MHZ   ?= 12
+
+board9k-lint:
+	for f in 12 24 84; do \
+	  $(VERILATOR) --lint-only $(VFLAGS) -Wno-PINCONNECTEMPTY -Wno-DECLFILENAME \
+	    --top-module top_gen -GTRC_MHZ=$$f $(GOWIN_SIM) $(GEN_SRCS) || exit 1; done
+
+$(TN9K_OUT)/mhz: FORCE
+	@mkdir -p $(@D); echo $(TN9K_MHZ) | cmp -s - $@ || echo $(TN9K_MHZ) > $@
+
+board9k-synth: $(TN9K_OUT)/top_gen.json
+$(TN9K_OUT)/top_gen.json: $(GEN_SRCS) $(TN9K_OUT)/mhz
+	$(BOARD_YOSYS) -l $(TN9K_OUT)/synth.log -p 'read_verilog -sv $(GEN_SRCS); chparam -set TRC_MHZ $(TN9K_MHZ) top_gen; synth_gowin -top top_gen -json $@; stat' > /dev/null
+	@echo "== top_gen"; tail -n 45 $(TN9K_OUT)/synth.log | grep -E '$(STAT_RE)' || true
+
+board9k-pnr: $(TN9K_OUT)/top_gen.fs
+$(TN9K_OUT)/top_gen.fs: $(TN9K_OUT)/top_gen.json $(TN9K)/tangnano9k.cst $(TN9K)/clocks.py
+	TRC_MHZ=$(TN9K_MHZ) $(NEXTPNR) --json $< --write $(TN9K_OUT)/top_gen_pnr.json \
+	  --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=$(TN9K)/tangnano9k.cst \
+	  --pre-pack $(TN9K)/clocks.py --report $(TN9K_OUT)/report.json -l $(TN9K_OUT)/pnr.log > /dev/null 2>&1 \
+	  || { tail -n 30 $(TN9K_OUT)/pnr.log; exit 1; }
+	$(GOWIN_PACK) -d GW1N-9C -o $@ $(TN9K_OUT)/top_gen_pnr.json
+	@grep -E 'Max frequency' $(TN9K_OUT)/pnr.log | tail -n 1
+	@grep -P '^Info: \t +(LUT4|ALU|DFF|IOB|rPLL|IOLOGICO):' $(TN9K_OUT)/pnr.log
 
 # Gowin EDA on the Windows side of WSL (gw_sh.exe): a copy of the sources in a
 # Windows temp folder, reports and the bitstream back to $(TN20K_OUT)/gowin.
@@ -162,4 +194,6 @@ board-gowin: $(STEP0_SRCS) $(TN20K)/tangnano20k.cst $(TN20K)/top_step0.sdc.in $(
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all lint test crc-check synth board-lint board-synth board-pnr board-gowin clean
+FORCE:
+
+.PHONY: FORCE all lint test crc-check synth board-lint board-synth board-pnr board9k-lint board9k-synth board9k-pnr board-gowin clean

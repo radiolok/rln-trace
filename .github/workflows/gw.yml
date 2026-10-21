@@ -52,6 +52,11 @@ jobs:
           make -C gw board-lint
           make -C gw board-synth
 
+      - name: Tang Nano 9K, signal source (lint, Yosys synth)
+        run: |
+          make -C gw board9k-lint
+          make -C gw board9k-synth
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -59,4 +64,5 @@ jobs:
           path: |
             gw/build/synth/*.log
             gw/build/tangnano20k/synth.log
+            gw/build/tangnano9k/synth.log
           if-no-files-found: ignore

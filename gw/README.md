@@ -7,7 +7,7 @@ Gowin EDA: `logic`, `always_ff`/`always_comb`, параметры, без interf
 |---|---|
 | [`cores/`](cores/) | Платформонезависимые ядра: приём TPIU, метки времени, пакетизатор, SWD/JTAG, CSR, мосты к USB-чипу (HSPI для CH569, UHSIF для CH32H417) за общим интерфейсом потоков |
 | [`platform/`](platform/) | Платформенный слой Gowin; пока только поведенческие модели примитивов (rPLL, ODDR, IOBUF) для Verilator |
-| [`boards/`](boards/) | Верхние модули плат: [Tang Nano 20K, шаг 0](boards/tangnano20k/) — самотест в CH569 по HSPI и замер CRC; дальше зонд B, SLogic16U3 |
+| [`boards/`](boards/) | Верхние модули плат: [Tang Nano 20K, шаг 0](boards/tangnano20k/) — самотест в CH569 по HSPI 16 бит и замер CRC; [Tang Nano 9K](boards/tangnano9k/) — источник трассы, PPS и меандра для стенда; дальше зонд B, SLogic16U3 |
 | [`test/`](test/) | Тестбенчи Verilator на C++, модели внешних микросхем |
 
 ```sh
@@ -36,6 +36,8 @@ Ubuntu 24.04.
 | [`selftest_gen`](cores/selftest_gen.sv) | Генератор потока самотеста в формате [`stream.h`](../fw/ch569/usbstream/stream.h): нагрузка `stream_word(k)` или PRBS31, проверяется на ПК тем же `sw/usbstream` |
 | [`hspi_tx`](cores/hspi_tx.sv) | Передатчик HSPI в CH569 на 8/16/32 бита: запрос и готовность, заголовок с номером пакета и полем пользователя, CRC16/CRC32 с настраиваемыми параметрами. Протокол — [`doc/ch569-hspi.md`](../doc/ch569-hspi.md) |
 | [`uart_tx`](cores/uart_tx.sv), [`uart_hex`](cores/uart_hex.sv) | UART 8N1 и выгрузка пакетов `hspi_rx` hex-строками для `find_crc.py` |
+| [`uart_status`](cores/uart_status.sv), [`uart_mux`](cores/uart_mux.sv) | Строка состояния hex-словами; две строки в один UART по очереди, целиком |
+| [`tpiu_tx`](cores/tpiu_tx.sv) | Синтетический порт трассы TPIU: кадры, вычисляемые по номеру, синхрослова, 4/2/1 бит, DDR-выборки (Tang Nano 9K, шаг 2) |
 | [`selftest_hspi`](cores/selftest_hspi.sv) | Генератор и передатчик вместе, блок на пакет: ПЛИС-часть шага 0 |
 | [`hspi_rx`](cores/hspi_rx.sv) | Приём HSPI от CH569 (команды) на такте HTCLK: HTRDY только при месте под целый пакет, CRC отделяется линией задержки, признак «пакет хороший» на закрывающем слове; сырой режим для замера CRC. FIFO в один блок BSRAM |
 
@@ -80,3 +82,8 @@ FIFO, провалы HTVLD) на своём такте против `hspi_rx`. �
 тактов, долгая остановка потребителя (HTRDY держит передатчик, потерь нет), сбой бита, пропуск номера,
 TLL2B ≠ 0, слишком длинный пакет — плохим помечается только он; сырой режим. Те же четыре сборки по
 ширине и CRC. `make crc-check` — репетиция замера CRC на шаге 0.
+
+[`test/loop/tb_loop.cpp`](test/loop/tb_loop.cpp) — петля `tpiu_tx` → `trace_rx` на разных тактах: порт 1,
+2, 4 бита, синхрослова каждый кадр и раз в 64 кадра, с полусинхрословами; каждый принятый кадр должен
+совпасть с кадром своего номера. [`test/uart/tb_uart.cpp`](test/uart/tb_uart.cpp) — пакеты и строки
+состояния через `uart_mux` в линию UART и обратно в текст: строки целые, пакеты по порядку.
