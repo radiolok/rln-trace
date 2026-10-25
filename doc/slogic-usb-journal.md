@@ -47,6 +47,7 @@
 | [`tools/slogic/uprobe`](../tools/slogic/uprobe/) | 22 свободных GPIO: вход / 0 / 1 по JTAG, кто идёт следом, запись смен уровней, частотомер G13 |
 | [`tools/slogic/sdprobe`](../tools/slogic/sdprobe/) | SerDes Q0: CSR из toml, детекторы REFCLK, CMU_OK, частоты тактов квада; `sdlib.v` — общий с usb2 |
 | [`tools/slogic/usb2`](../tools/slogic/usb2/) | образ USB2 HS: SoftPHY + Device Controller, такт от SerDes (`serdes/` — ciniml, BSL-1.0), ПЗУ дескрипторов (`mkdesc.py`), EP1 IN — счётчик или тестовое наполнение, EP1 OUT; журнал пакетов UTMI в BSRAM |
+| [`tools/slogic/usb3`](../tools/slogic/usb3/) | USB3: стек ciniml (`ciniml/`, BSL-1.0, Veryl), IP SerDes / USB 3.0 PHY / арбитр upar — из своей Gowin EDA (`ip/`), `build.sh`, `host/u3status.py` (ER1 по JTAG), `host/u3prbs.py` (скорость EP1 IN) |
 | `tools/slogic/usb2` — `usb2d.v` | образ на своём стеке: [`daisho/`](../tools/slogic/usb2/daisho/) (BSD-2) + `usb2_utmi.v`; EP1 IN, EP2 OUT; журнал пакетов и событий шины; `usb2d.py`; симуляция `sim/run.sh` |
 
 ```sh
@@ -78,6 +79,16 @@ python3 tools/slogic/usb2/usb2d.py --off 1  # отключиться от шин
 PY="/mnt/c/Program Files/Python310/python.exe"
 "$PY" -m pip install --user libusb-package
 PYTHONIOENCODING=utf-8 WSLENV=PYTHONIOENCODING "$PY" $(wslpath -w tools/slogic/usb2/usb2stream.py) --sec 30 --chunk 1048576
+```
+
+USB3 (нужен `veryl` в PATH — готовый бинарник релиза; кабель — с SS-жилами):
+
+```sh
+sh tools/slogic/usb3/build.sh               # IP из Gowin EDA (один раз), veryl build, сборка → usb3ref.fs
+$O/openFPGALoader -c ft2232 --busdev-num 1:$(cat /sys/bus/usb/devices/1-2/devnum) -m tools/slogic/usb3/usb3ref.fs
+python3 tools/slogic/usb3/host/u3status.py  # LTSSM, история состояний, счётчики — по JTAG
+"$PY" -m pip install --user libusb1          # один раз
+PYTHONIOENCODING=utf-8 WSLENV=PYTHONIOENCODING "$PY" $(wslpath -w tools/slogic/usb3/host/u3prbs.py) -s 30
 ```
 
 Привязка `usbipd bind --hardware-id 1209:0001` (администратор) и правило udev для `1209:0001`
@@ -432,6 +443,38 @@ U0 u0=1 link_cfg=1 dev_cfg=1 addr=57 … dppErr=0      → 1209:0001 «USB SS Sa
 У ciniml на Linux асинхронно — 446 МБ/с (bMaxBurst 15); предел линка с SKP — около 482. Под Windows вышло больше.
 Против USB2 — в 10 раз; трасса TPIU на 57 МГц (57 МБ/с) проходит с восьмикратным запасом.
 
+## 2026-10-25. USB3, шаг 1: своя сборка, IP — из своей Gowin EDA
+
+Эталон перенесён в `tools/slogic/usb3/`. Исходники ciniml — в `ciniml/` без изменений (BSL-1.0, происхождение —
+в `ciniml/README.md`): стек на Veryl, эталонный верх, csr квада. Зашифрованные IP Gowin из их репозитория не
+взяты — `build.sh` делает их сам из установленной Gowin EDA, так же как IP в usb2.
+
+| Что | Как |
+|---|---|
+| обёртка `SerDes_Top` (`serdes.v`) | `GowinModGen -do ip/serdes.mod`, `-type SERDES`, протокол `usb30phy`, Q0 LN0, QPLL0, REFCLK0 125 МГц |
+| арбитр upar | синтез `SERDES_IP/data/Upar_Arbiter` в нетлист, верх — `~upar_arbiter_wrap.SerDes_Top`; `define.vh` = `` `define MODULE_NAME SerDes_Top ``, `parameter.vh` = `DRP_NUM = 4` |
+| USB 3.0 PHY | синтез `IPlib/USB30PHY/data` в нетлист, верх `USB3_0_PHY_Top`; `usb3_0_phy_name.v` = `` `define module_name USB3_0_PHY_Top ``, `usb3_0_phy_top_define.vh` = `` `define Q0_LN0 `` |
+| csr квада | `ciniml/board/serdes.csr` (из GUI) — в сборку через `set_csr` |
+| стек | `veryl build` → `.sv` (в git не идут), `-verilog_std sysv2017` |
+
+**Для статьи: ключ, без которого PHY глух.** `serdes.mod` из sdprobe (там протокол был только ради квада) давал
+обёртку без арбитра upar: порт DRP у USB 3.0 PHY висел в воздухе. GUI же ставит `GTR12_UPARA` + арбитр. Разница —
+один ключ `-USB3_0_PHY_TopEnableDRP true` (нашёлся строкой `EnableDRP true` в `SERDES_IP.dll`). С ним и
+`-mod_name SerDes_Top` обёртка совпала с GUI-шной до байта (без учёта CRLF). Шаблоны define-файлов — тоже строками
+в DLL: `` `define module_name %1 ``, `` `define Q0_LN0 `` (USB30PHY.dll), `` `define MODULE_NAME %1 ``,
+`define.vh`/`parameter.vh` (SERDES_IP.dll); `DRP_NUM` = 4 — по ширине портов обёртки.
+
+Не вышло: csr из toml. `serdes_toml_to_csr_15k.exe` не принимает toml из GUI (`KeyError: 'cpll_to_mipi_enable'`
+— у GUI свой набор ключей, как было и с sdprobe). csr — не зашифрованный IP, а данные настройки квада, поэтому
+взят готовым из того же BSL-репозитория; toml лежит рядом для справки.
+
+| Проверка | Результат |
+|---|---|
+| нетлисты IP | те же имена модулей, что у ciniml, размеры ±1 % |
+| сборка (place 3, route 2, `serdesRetiming=1`) | pclk **122,293 МГц** — ровно как с IP из GUI ciniml |
+| железо | U0 с первой заливки (один сброс хостом — «device firmware changed», как у ciniml) |
+| `u3prbs.py`, Windows, очередь 4 × 1 МиБ, 30 с | **460,6 МБ/с**, 13,8 ГБ, 0 ошибочных байт |
+
 ## Открытые вопросы и что дальше
 
 1. ~~Скорость HS без usbipd~~ — 46,5 МБ/с под Windows (WinUSB), 43,7 через usbipd; предел был в Python.
@@ -442,6 +485,6 @@ U0 u0=1 link_cfg=1 dev_cfg=1 addr=57 … dppErr=0      → 1209:0001 «USB SS Sa
    при 57 МГц это 57 МБ/с против ~46 по USB2 — без отбрасывания простоя только до ~40 МГц.
 3. ~~Команды по EP0 (vendor) вместо JTAG~~ — сделаны.
 4. ~~Переход на USB2-ядро Daisho~~ — сделан (`usb2d.v`); ~~команды по USB~~ — сделаны (vendor-запросы EP0).
-5. USB3 — эталон ciniml работает (462 МБ/с). Дальше по шагам: (1) перенос в `tools/slogic/usb3/` со своей сборкой и
-   своим IP PHY из `GowinModGen`; (2) закрыть тайминг pclk 125 МГц; (3) свой верх `usb3d.v` — регистры по EP0,
+5. USB3 — эталон ciniml работает (462 МБ/с). Дальше по шагам: ~~(1) перенос в `tools/slogic/usb3/` со своей сборкой и
+   своим IP PHY из `GowinModGen`~~ — сделан; (2) закрыть тайминг pclk 125 МГц; (3) свой верх `usb3d.v` — регистры по EP0,
    журнал по JTAG, поток трассы через FIFO в EP1 IN.
