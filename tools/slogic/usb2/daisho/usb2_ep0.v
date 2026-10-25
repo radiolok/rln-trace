@@ -35,7 +35,10 @@ output	wire			buf_out_arm_ack,
 output	reg				vend_req_act,
 output	reg		[7:0]	vend_req_request,
 output	reg		[15:0]	vend_req_val,
-//output	reg		[15:0]	vend_req_index,
+output	reg		[15:0]	vend_req_index,	// rln
+output	reg				vend_rd,		// rln: стадия данных IN vendor-запроса — байты снаружи
+output	wire	[7:0]	vend_rd_addr,	// rln: байт ответа; данные — в следующем такте, как у ПЗУ
+input	wire	[7:0]	vend_rd_data,
 //output	reg		[15:0]	vend_req_len,
 
 input	wire			data_toggle_act,
@@ -179,6 +182,7 @@ always @(posedge phy_clk) begin
 		dev_addr <= 0;
 		toggle_rst <= 0;
 		vend_req_act <= 0;
+		vend_rd <= 0;
 		dev_config <= 0;
 		err_setup_pkt <= 0;
 		
@@ -228,6 +232,7 @@ always @(posedge phy_clk) begin
 	ST_IN_PARSE_1: begin
 		// parse setup packet
 		packet_out_len <= packet_setup_wlen;
+		vend_rd <= 0;	// rln
 		
 		// confirm this is going in the right direction
 		//if(packet_setup_dir != SETUP_DIR_DEVTOHOST) begin
@@ -381,15 +386,18 @@ always @(posedge phy_clk) begin
 		// VENDOR REQUEST
 		vend_req_request <= packet_setup_req;
 		vend_req_val <= packet_setup_wval;
-		//vend_req_index <= packet_setup_widx;
+		vend_req_index <= packet_setup_widx;
 		// optional data stage for bidir control transfers
 		// would require additional unsupported code in this endpoint
 		//vend_req_len <= packet_setup_wlen;
 		// signal to external interface there was a vend_req
 		vend_req_act <= 1'b1;
 		dc <= 0;
-		// send 0byte response (DATA1)
-		len_out <= 0;
+		// rln: запрос к хосту — стадия данных IN одним пакетом до 64 байт снаружи (vend_rd_*),
+		// от хоста — без стадии данных, статус ZLP
+		vend_rd <= packet_setup_dir == SETUP_DIR_DEVTOHOST;
+		len_out <= packet_setup_dir != SETUP_DIR_DEVTOHOST ? 10'd0 :
+			packet_setup_wlen > 16'd64 ? 10'd64 : packet_setup_wlen[9:0];
 		ready_in <= 1;
 		hasdata_out <= 1;
 		state_in <= ST_IDLE;
@@ -469,10 +477,16 @@ usb2_ep0in_ram	iu2ep0i (
 // relevant descriptors (device, interface, endpoint etc)
 
 	
+	wire	[7:0]	rom_q;
+	reg				vend_rd_q;	// rln: переключать вместе с задержкой ПЗУ
+	assign			vend_rd_addr = buf_out_addr[7:0];
+	assign			buf_out_q = vend_rd_q ? vend_rd_data : rom_q;
+	always @(posedge phy_clk) vend_rd_q <= vend_rd;
+
 usb2_descrip_rom iu2d (
 	.clk 		( phy_clk ),
 	.adr 		( buf_out_addr + descrip_addr_offset),
-	.dat_r 		( buf_out_q )
+	.dat_r 		( rom_q )
 );
 
 	

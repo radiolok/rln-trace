@@ -56,6 +56,10 @@ output	wire			buf_out_arm_ack,
 output	wire			vend_req_act,
 output	wire	[7:0]	vend_req_request,
 output	wire	[15:0]	vend_req_val,
+output	wire	[15:0]	vend_req_index,	// rln: vendor-запросы с wIndex и стадией данных IN
+output	wire			vend_rd,
+output	wire	[7:0]	vend_rd_addr,
+input	wire	[7:0]	vend_rd_data,
 
 output	wire			err_crc_pid,
 output	wire			err_crc_tok,
@@ -262,6 +266,10 @@ usb2_protocol ipr (
 	.vend_req_act		( vend_req_act ),
 	.vend_req_request	( vend_req_request ),
 	.vend_req_val		( vend_req_val ),
+	.vend_req_index		( vend_req_index ),
+	.vend_rd			( vend_rd ),
+	.vend_rd_addr		( vend_rd_addr ),
+	.vend_rd_data		( vend_rd_data ),
 	
 	.endp_mode			( prot_endp_mode ),
 	

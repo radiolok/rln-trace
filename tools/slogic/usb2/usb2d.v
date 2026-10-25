@@ -6,6 +6,12 @@
 // и освобождается только по ACK хоста — разрыв счётчика у хоста = потеря.
 // EP2 OUT (bulk): принимается всё, считаются пакеты и байты.
 //
+// Команды — регистром cmd (поля ниже); писать его можно по USB или по JTAG, действует последняя запись.
+// USB, vendor-запросы EP0 (bmRequestType 0x40 / 0xC0, получатель — устройство):
+//   bRequest 0x10 + n, OUT без данных: регистр n ← {wIndex, wValue}; n = 0 — cmd
+//     (биты [31:28] — те же 0xA, что у JTAG; иначе запись не действует)
+//   bRequest 0x01, IN: слова wIndex… с ER1 ниже (только 0..23, без журнала), wLength ≤ 64 байт,
+//     младший байт слова первым
 // ER2 (0x43): [31:28] 0xA, [0] не отдавать данные EP1 (cork), [1] отключиться от шины (снять
 //   подтяжку), [2] смена значения — журнал заново, [3] писать в журнал и SOF, [5:4] данные EP1 IN:
 //   0 счётчик, 1 байты 0x00, 2 0xFF, 3 0x7E, [6] не писать в журнал события шины, [7] только FS,
@@ -20,7 +26,8 @@
 //   9 пакетов EP2 OUT  10 байт EP2 OUT  11 err_crc_pid  12 тактов 60 МГц за окно
 //   13 тактов 125 МГц за окно  14 err_crc_tok  15 err_crc_pkt  16 err_pid_out_of_seq
 //   17 err_setup_pkt (14..17 — фронтов)  18 [10:0] номер кадра  19 [7:0] последний vendor-запрос,
-//   [31:16] его wValue  20..22 0  23 [12:0] записей журнала, [31] журнал полон
+//   [31:16] его wValue  20 его wIndex  21 записей cmd по USB  22 записей cmd по JTAG
+//   23 [12:0] записей журнала, [31] журнал полон
 //   24.. журнал с адреса чтения, по два слова на запись, второе — такт 60 МГц:
 //     пакет UTMI {[31] передача, [30] rxerror, [29] 0, [25:16] байт, [15:8] PID, [7:0] второй байт};
 //     событие шины {[29] 1, [15:12] состояние, [11:10] linestate, [9:8] opmode, [7:6] xcvrselect,
@@ -34,7 +41,8 @@ module top (
     input wire tck_pad_i, tms_pad_i, tdi_pad_i,
     output wire tdo_pad_o
 );
-    localparam [7:0] VER = 1;
+    localparam [7:0] VER = 2;
+    localparam NREG = 24;  // слова 0..23 — общие для JTAG и USB
     localparam H = 24, LOG2 = 12;  // журнал: 4К записей
     localparam WIN_LOG2 = 24;
 
@@ -45,7 +53,7 @@ module top (
         .OSCOUT(osc), .OSCREF(), .OSCEN(1'b1), .FMODE(1'b1),
         .RTRIM(8'd0), .RTCTRIM(6'd0));
 
-    reg [31:0] cmd = 0;
+    reg [31:0] cmd = 0;  // домен 60 МГц
 
     // ---- такты (как в usb2.v) ----
     reg [21:0] sdseq = 0;
@@ -100,9 +108,10 @@ module top (
     wire [9:0] out_len;
     wire out_hasdata, out_arm_ack;
     reg out_arm = 0;
-    wire vend_act;
-    wire [7:0] vend_req;
-    wire [15:0] vend_val;
+    wire vend_act, vend_rd;
+    wire [7:0] vend_req, vend_rd_addr;
+    wire [15:0] vend_val, vend_idx;
+    wire [7:0] vend_rd_data;
     wire [4:0] err;
     wire [10:0] frame_num;
 
@@ -121,6 +130,8 @@ module top (
         .buf_out_addr(9'd0), .buf_out_q(out_q), .buf_out_len(out_len), .buf_out_hasdata(out_hasdata),
         .buf_out_arm(out_arm), .buf_out_arm_ack(out_arm_ack),
         .vend_req_act(vend_act), .vend_req_request(vend_req), .vend_req_val(vend_val),
+        .vend_req_index(vend_idx), .vend_rd(vend_rd), .vend_rd_addr(vend_rd_addr),
+        .vend_rd_data(vend_rd_data),
         .err_crc_pid(err[0]), .err_crc_tok(err[1]), .err_crc_pkt(err[2]), .err_pid_out_of_seq(err[3]),
         .err_setup_pkt(err[4]),
         .dbg_frame_num(frame_num));
@@ -208,7 +219,7 @@ module top (
     reg vend_q = 0;
     reg [10:0] frame_q = 0;
     reg [7:0] last_req = 0;
-    reg [15:0] last_val = 0;
+    reg [15:0] last_val = 0, last_idx = 0;
     integer k;
     always @(posedge clk60) begin
         vend_q <= vend_act;
@@ -220,6 +231,7 @@ module top (
             n_vend <= n_vend + 1'b1;
             last_req <= vend_req;
             last_val <= vend_val;
+            last_idx <= vend_idx;
         end
         if (fst == F_COMMIT & in_commit_ack) begin
             n_ipkt <= n_ipkt + 1'b1;
@@ -308,6 +320,38 @@ module top (
     fmeter m60 (.fclk(clk60), .clk(osc), .tick(&tmr), .cnt(f60));
     fmeter m125 (.fclk(sd_txclk), .clk(osc), .tick(&tmr), .cnt(f125));
 
+    // cmd: запись по USB (vendor 0x10) и по JTAG (через переключатель из домена TCK)
+    reg [31:0] jcmd = 0;
+    reg jt = 0;
+    reg [2:0] jt_s = 0;
+    reg [31:0] n_ucmd = 0, n_jcmd = 0;
+    always @(posedge clk60) begin
+        jt_s <= {jt_s[1:0], jt};
+        if (jt_s[2] ^ jt_s[1]) begin
+            cmd <= jcmd;
+            n_jcmd <= n_jcmd + 1'b1;
+        end else if (vend_act & ~vend_q & vend_req == 8'h10 & vend_idx[15:12] == 4'hA) begin
+            cmd <= {vend_idx, vend_val};
+            n_ucmd <= n_ucmd + 1'b1;
+        end
+    end
+
+    // ---- слова 0..23: общие для ER1 (JTAG) и vendor-чтения по USB ----
+    wire [32*NREG-1:0] regv = {
+        {lptr[LOG2], {(30 - LOG2){1'b0}}, lptr},  // 23
+        n_jcmd, n_ucmd, {16'd0, last_idx}, {last_val, 8'd0, last_req}, {21'd0, frame_num},  // 22..18
+        n_err[32 * 4 +: 32], n_err[32 * 3 +: 32], n_err[32 * 2 +: 32], n_err[32 * 1 +: 32],  // 17..14
+        f125, f60, n_err[0 +: 32], n_ob, n_opkt, n_ib, n_ipkt, n_vend, n_sof, n_rst,  // 13..4
+        {12'd0, phy_termsel, phy_xcvrsel, phy_opmode, chirps, ust, phy_linestate, suspend,
+            configured, hs, rst, lock2, lock1},  // 3
+        cmd, {seq, 16'd0, VER}, 32'h444E4C52};  // 2..0
+
+    // USB: vendor IN 0x01 — слова с wIndex; адрес байта защёлкивается, данные — в следующем такте
+    reg [7:0] vra = 0;
+    always @(posedge clk60) vra <= vend_rd_addr;
+    wire [15:0] vw = last_idx + vra[7:2];
+    assign vend_rd_data = last_req != 8'h01 | vw >= NREG ? 8'h00 : regv[32 * vw + 8 * vra[1:0] +: 8];
+
     // ---- пользовательский JTAG (как в usb2.v) ----
     wire tck, tdi, sh_cap, upd, en1, en2;
     reg [19:0] idx = 0;
@@ -323,32 +367,7 @@ module top (
         qb <= logb[ra[LOG2:1]];
         qsel <= ra[0];
     end
-    reg [31:0] hw;
-    always @* begin
-        case (w)
-            0: hw = 32'h444E4C52;
-            1: hw = {seq, 16'd0, VER};
-            2: hw = cmd;
-            3: hw = {12'd0, phy_termsel, phy_xcvrsel, phy_opmode, chirps, ust, phy_linestate, suspend,
-                configured, hs, rst, lock2, lock1};
-            4: hw = n_rst;
-            5: hw = n_sof;
-            6: hw = n_vend;
-            7: hw = n_ipkt;
-            8: hw = n_ib;
-            9: hw = n_opkt;
-            10: hw = n_ob;
-            11: hw = n_err[0 +: 32];
-            12: hw = f60;
-            13: hw = f125;
-            14, 15, 16, 17: hw = n_err[32 * (w - 13) +: 32];
-            18: hw = {21'd0, frame_num};
-            19: hw = {last_val, 8'd0, last_req};
-            20, 21, 22: hw = 0;
-            23: hw = {lptr[LOG2], {(30 - LOG2){1'b0}}, lptr};
-            default: hw = qsel ? qb : qa;
-        endcase
-    end
+    wire [31:0] hw = w < NREG ? regv[32 * w +: 32] : qsel ? qb : qa;
     wire tdo1 = hw[bi];
 
     GW_JTAG jtag (
@@ -366,8 +385,10 @@ module top (
         idx <= en1_q & sh_q ? idx + 1'b1 : 20'd0;
         if (en2_q & sh_q)
             sr <= {tdi, sr[31:1]};
-        if (en2_q & upd_q & (sr[31:28] == 4'hA))
-            cmd <= sr;
+        if (en2_q & upd_q & (sr[31:28] == 4'hA)) begin
+            jcmd <= sr;
+            jt <= ~jt;
+        end
         if (en2_q & upd_q & (sr[31:28] == 4'hB))
             raddr <= sr;
     end

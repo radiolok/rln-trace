@@ -58,6 +58,25 @@ module tb;
         endcase
     end
 
+    // vendor: ловим запрос; чтение — байт = адрес + wIndex (данные в такте после адреса, как ПЗУ)
+    wire vact;
+    wire [7:0] vreq, vra;
+    wire [15:0] vval, vidx;
+    reg [7:0] vra_q = 0;
+    always @(posedge clk) vra_q <= vra;
+    wire [7:0] vrd = vra_q + vidx[7:0];
+    reg [7:0] got_req = 0;
+    reg [15:0] got_val = 0, got_idx = 0;
+    integer n_vact = 0;
+    reg vact_q = 0;
+    always @(posedge clk) begin
+        vact_q <= vact;
+        if (vact & ~vact_q) begin
+            got_req <= vreq; got_val <= vval; got_idx <= vidx;
+            n_vact = n_vact + 1;
+        end
+    end
+
     usb2_top dut (
         .ext_clk(clk), .reset_n(rstn), .reset_n_out(rstn_out), .phy_clk(clk),
         .utmi_dataout(dout), .utmi_txvalid(txvalid), .utmi_txready(txready),
@@ -72,7 +91,8 @@ module tb;
         .buf_in_commit_ack(commit_ack),
         .buf_out_addr(9'd0), .buf_out_q(), .buf_out_len(out_len), .buf_out_hasdata(out_hasdata),
         .buf_out_arm(out_arm), .buf_out_arm_ack(out_ack),
-        .vend_req_act(), .vend_req_request(), .vend_req_val(),
+        .vend_req_act(vact), .vend_req_request(vreq), .vend_req_val(vval),
+        .vend_req_index(vidx), .vend_rd(), .vend_rd_addr(vra), .vend_rd_data(vrd),
         .err_crc_pid(), .err_crc_tok(), .err_crc_pkt(), .err_pid_out_of_seq(), .err_setup_pkt(),
         .dbg_frame_num());
 
@@ -314,6 +334,40 @@ module tb;
         hand(8'hD2);
         repeat (2000) @(posedge clk);
         if (~cfg) begin $display("ОШИБКА: не configured"); errors = errors + 1; end
+
+        // vendor OUT 0x10: {wIndex, wValue} = 0xA0123456
+        setup(5, 64'h4010_5634_12A0_0000);
+        token(8'h69, 5, 0);
+        expect_pid(8'h4B, 0);
+        hand(8'hD2);
+        repeat (20) @(posedge clk);
+        $display("vendor OUT: запрос %h, wValue %h, wIndex %h", got_req, got_val, got_idx);
+        if (got_req != 8'h10 | got_val != 16'h3456 | got_idx != 16'hA012) errors = errors + 1;
+        // vendor IN 0x01, wIndex 0x30, 64 байта; затем 8 байт с wIndex 0x05
+        for (k = 0; k < 2; k = k + 1) begin
+            setup(5, k ? 64'hC001_0000_0500_0800 : 64'hC001_0000_3000_4000);
+            token(8'h69, 5, 0);
+            expect_pid(8'h4B, k ? 8 : 64);
+            for (i = 0; i < rxn - 3; i = i + 1)
+                if (rx[1 + i] != ((k ? 8'h05 : 8'h30) + i) & 8'hFF) begin
+                    if (errors < 20) $display("  ОШИБКА: vendor IN байт %0d = %h", i, rx[1 + i]);
+                    errors = errors + 1;
+                end
+            $display("vendor IN: %0d байт, первый %h, последний %h", rxn - 3, rx[1], rx[rxn - 3]);
+            hand(8'hD2);
+            token(8'hE1, 5, 0);
+            data(8'h4B, 0);
+            expect_pid(8'hD2, 0);
+        end
+        // стандартный запрос после vendor — снова из ПЗУ
+        setup(5, 64'h8006000100001200);
+        token(8'h69, 5, 0);
+        expect_pid(8'h4B, 18);
+        if (rx[1] != 8'h12 | rx[2] != 8'h01) begin $display("  ОШИБКА: дескриптор после vendor"); errors = errors + 1; end
+        hand(8'hD2);
+        token(8'hE1, 5, 0);
+        data(8'h4B, 0);
+        expect_pid(8'hD2, 0);
 
         // EP1 IN: 6 пакетов, третий без ACK — должен прийти повтором
         k = 0;

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Кадр образа usb2d (ядро Daisho) через JTAG: такты, состояние шины, счётчики (см. шапку usb2d.v).
+"""Кадр образа usb2d (ядро Daisho): такты, состояние шины, счётчики (см. шапку usb2d.v).
 
-    RLN_FPGA_USB=1-2 python3 usb2d.py              # кадр
+Кадр и команды — по USB (vendor-запросы EP0) или по JTAG: --usb / --jtag; по умолчанию JTAG, если
+задан RLN_FPGA_USB, иначе USB. Журнал — только по JTAG (им отлаживают сам USB).
+
+    RLN_FPGA_USB=1-2 python3 usb2d.py              # кадр по JTAG
+    python3 usb2d.py --usb                         # кадр по USB, без FT2232H
     RLN_FPGA_USB=1-2 python3 usb2d.py --cork 1     # не отдавать данные EP1 IN
     RLN_FPGA_USB=1-2 python3 usb2d.py --off 1      # отключиться от шины (0 — подключиться)
     RLN_FPGA_USB=1-2 python3 usb2d.py --fs 1       # только FS; --blind 1 — HS без чирпов хоста
@@ -15,7 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uprobe"))
 import uprobe as u  # noqa: E402
-from usb2 import PID, H, NW, frame  # noqa: E402
+from usb2 import PID, H, NW  # noqa: E402
 
 MAGIC = 0x444E4C52  # "RLND"
 STATES = ["OFF", "FS", "FSRST", "CHIRP_K", "CHIRP_WAIT", "HS", "HS_REV", "SUSP", "RESUME", "BUSRST"]
@@ -27,18 +31,64 @@ NAMES = {4: "сбросов шины", 5: "SOF", 6: "vendor-запросов", 7
 FIELDS = {"cork": (0, 1), "off": (1, 1), "pat": (4, 2), "fs": (7, 1), "len": (8, 8), "blind": (16, 1)}
 
 
+VID, PIDN = 0x1209, 0x0001
+REQ_READ, REQ_WRITE = 0x01, 0x10  # vendor IN: слова с wIndex; vendor OUT 0x10 + n: регистр n
+
+
+class Jtag:
+    def frame(self, cmds=()):
+        return u.parse(u.openocd(list(cmds) + u.er1("", NW)), NW)[""]
+
+    def write_cmd(self, c):
+        return self.frame(u.er2(c))
+
+
+class Usb:
+    def __init__(self):
+        import usb.core
+        self.dev = usb.core.find(idVendor=VID, idProduct=PIDN)
+        if self.dev is None:
+            sys.exit(f"нет устройства {VID:04x}:{PIDN:04x}")
+
+    def read(self, first, n):
+        """n слов с first: по 16 за запрос (EP0 — один пакет 64 байта)."""
+        w = []
+        while n > 0:
+            k = min(n, 16)
+            b = bytes(self.dev.ctrl_transfer(0xC0, REQ_READ, 0, first, 4 * k, timeout=1000))
+            if len(b) != 4 * k:
+                sys.exit(f"vendor IN: {len(b)} байт вместо {4 * k}")
+            w += [int.from_bytes(b[i:i + 4], "little") for i in range(0, len(b), 4)]
+            first, n = first + k, n - k
+        return w
+
+    def frame(self, cmds=()):
+        return self.read(0, NW)
+
+    def write_cmd(self, c):
+        self.dev.ctrl_transfer(0x40, REQ_WRITE, c & 0xFFFF, c >> 16, timeout=1000)
+        return self.frame()
+
+
+def transport(a):
+    if a.usb or not a.jtag and not os.environ.get("RLN_FPGA_USB"):
+        return Usb()
+    return Jtag()
+
+
 def st_name(s):
     return STATES[s] if s < len(STATES) else str(s)
 
 
 def cmd_rearm(a):
-    w = frame()
-    frame(u.er2(0xA << 28 | (w[2] ^ 4) & 0x0FFFFFFF))
+    t = transport(a)
+    w = t.frame()
+    t.write_cmd(0xA << 28 | (w[2] ^ 4) & 0x0FFFFFFF)
     print("журнал заново")
 
 
 def cmd_log(a):
-    w = frame()
+    w = Jtag().frame()
     n = min(w[23] & 0x1FFF, a.n)
     print(f"записей {w[23] & 0x1FFF}{' (полон)' if w[23] >> 31 else ''}, показываю {n}")
     words, chunk = [], 256
@@ -68,17 +118,22 @@ def cmd_log(a):
 
 
 def cmd_status(a):
-    cmds = []
+    t = transport(a)
     sets = {k: getattr(a, k) for k in FIELDS if getattr(a, k) is not None}
+    if isinstance(t, Usb) and sets.get("off"):
+        sys.exit("--off 1 по USB отрежет сам USB; отключать — по JTAG (--jtag), он же и подключит")
     if sets:
-        c = frame()[2] & 0x0FFFFFFF
+        c = t.frame()[2] & 0x0FFFFFFF
         for k, v in sets.items():
             b, n = FIELDS[k]
             if k == "len":
                 v //= 4
             c = c & ~((1 << n) - 1 << b) | (v & (1 << n) - 1) << b
-        cmds = u.er2(0xA << 28 | c)
-    w = u.parse(u.openocd(cmds + u.er1("", NW)), NW)[""]
+        w = t.write_cmd(0xA << 28 | c)
+    else:
+        w = t.frame()
+    if w[0] != MAGIC:
+        sys.exit(f"слово 0 {w[0]:#010x}, а не RLND — другой образ?")
     t = 2 ** 24 / u.F_OSC
     st = w[3]
     print(f"v{w[1] & 0xFF}, seq {w[1] >> 24}, команда {w[2]:#x}")
@@ -89,12 +144,16 @@ def cmd_status(a):
     print(f"60 МГц: {w[12] / t / 1e6:.3f}, 125 МГц: {w[13] / t / 1e6:.3f} (по OSCB)")
     for i, n in NAMES.items():
         print(f"  {n:20} {w[i]}")
-    print(f"  последний vendor-запрос {w[19] & 0xFF:#04x}, wValue {w[19] >> 16:#06x}")
+    print(f"  последний vendor-запрос {w[19] & 0xFF:#04x}, wValue {w[19] >> 16:#06x}, wIndex {w[20]:#06x}")
+    print(f"  записей cmd: по USB {w[21]}, по JTAG {w[22]}")
     print(f"  журнал: {w[23] & 0x1FFF} записей{' (полон)' if w[23] >> 31 else ''}")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--usb", action="store_true", help="кадр и команды по USB")
+    g.add_argument("--jtag", action="store_true", help="кадр и команды по JTAG (RLN_FPGA_USB)")
     ap.add_argument("--cork", type=int, choices=(0, 1))
     ap.add_argument("--off", type=int, choices=(0, 1), help="1 — отключиться от шины")
     ap.add_argument("--fs", type=int, choices=(0, 1), help="1 — без чирпа, только FS")
