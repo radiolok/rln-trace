@@ -1,5 +1,6 @@
 // Источник трассы для SLogic16U3 на STM32F4-Discovery: ITM пишет в стимул-порт 0
-// счётчик n (32 бита, пакет 03 + 4 байта), TPIU выдаёт его на параллельный порт:
+// счётчик n (32 бита, пакет 03 + 4 байта), ETM (если cfg->etm) — трассу инструкций,
+// TPIU выдаёт оба потока (ID 1 и 2) на параллельный порт:
 //   PE2 TRACECLK → CH12, PE3..PE6 TRACED0..3 → CH8..CH11.
 // Пачки по cfg->burst значений, между ними пауза: в паузе TPIU шлёт синхронизацию,
 // приёмник по ней находит начало кадров. Значения n идут подряд через все пачки —
@@ -37,6 +38,16 @@
 #define TPI_CSPSR REG(0xE0040004)
 #define TPI_SPPR REG(0xE00400F0)
 #define TPI_FFCR REG(0xE0040304)
+#define ETM_CR REG(0xE0041000)
+#define ETM_TRIGGER REG(0xE0041008)
+#define ETM_SR REG(0xE0041010)
+#define ETM_TEEVR REG(0xE0041020)
+#define ETM_TECR1 REG(0xE0041024)
+#define ETM_FFLR REG(0xE004102C)
+#define ETM_IDR REG(0xE00411E4)
+#define ETM_TRACEIDR REG(0xE0041200)
+#define ETM_LAR REG(0xE0041FB0)
+#define ETM_CR_VAL (1u << 11 | 1u << 7)  // порт ETM включён, остановка ядра при полном FIFO
 
 #define MAGIC 0x544E4C52u  // "RLNT"
 #define ITM_TCR_VAL (1u << 16 | 1u << 2 | 1u)  // ATB ID 1, SYNCENA, ITMENA
@@ -58,6 +69,8 @@ struct cfg {  // смещения — в trace.py (CFG_*)
     uint32_t n;        // 0x2C следующее значение счётчика
     uint32_t reinit;   // 0x30 сколько раз переприменялась настройка трассы
     uint32_t ospeed;   // 0x34 крутизна выводов PE2..PE6 (OSPEEDR): 0 — низкая … 3 — очень высокая
+    uint32_t etm;      // 0x38 1 — трасса инструкций ETM (ID 2)
+    uint32_t etmidr;   // 0x3C ETMIDR — для декодера (вариант кодирования адреса ветвления)
 };
 #define CFG ((volatile struct cfg *)0x20000000)
 
@@ -150,12 +163,30 @@ static void apply_trace(void)
     ITM_TCR = ITM_TCR_VAL;
     ITM_TPR = 0;
     ITM_TER = 1;
+    // ETM: трасса всего кода, без широковещания ветвлений (прямые переходы декодер
+    // берёт из ELF), без триггера
+    ETM_LAR = 0xC5ACCE55;
+    ETM_CR = 1u << 10;  // программирование, питание включено
+    while (!(ETM_SR & 1u << 1))
+        ;
+    if (CFG->etm == 1) {
+        ETM_TRIGGER = 0x406F;    // никогда
+        ETM_TEEVR = 0x6F;        // трасса включена всегда
+        ETM_TECR1 = 0x01000000;  // исключающий режим без областей — весь код
+        ETM_FFLR = 24;           // остановить ядро, если в FIFO меньше 24 байт
+        ETM_TRACEIDR = 2;
+        ETM_CR = ETM_CR_VAL | 1u << 10;
+        ETM_CR = ETM_CR_VAL;     // конец программирования — последним
+    } else
+        ETM_CR = 1u;             // выключен
+    CFG->etmidr = ETM_IDR;
     CFG->reinit++;
 }
 
 static int trace_ok(void)
 {
-    return ITM_TCR == ITM_TCR_VAL && ITM_TER == 1 && (DEMCR & 1u << 24) && (DBGMCU_CR & 1u << 5);
+    return ITM_TCR == ITM_TCR_VAL && ITM_TER == 1 && (DEMCR & 1u << 24) && (DBGMCU_CR & 1u << 5) &&
+           (CFG->etm != 1 || (ETM_CR & (1u << 11 | 1u << 10 | 1u)) == 1u << 11);
 }
 
 void reset(void)
@@ -174,6 +205,7 @@ void reset(void)
         CFG->n = 0;
         CFG->reinit = 0;
         CFG->ospeed = 3;
+        CFG->etm = 1;
         CFG->magic = MAGIC;
     }
     apply_clock();

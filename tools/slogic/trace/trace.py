@@ -51,22 +51,23 @@ def openocd(args, cmd, timeout=60):
     return r.stdout + r.stderr
 
 
-def stm_set(src, pll_n, hdiv, width, burst, idle, n0=None, ospeed=3):
+def stm_set(src, pll_n, hdiv, width, burst, idle, n0=None, ospeed=3, etm=1):
     """n0 — начальное значение счётчика ITM (поле n), иначе продолжает с прошлого;
     ospeed — крутизна выводов трассы (OSPEEDR 0..3)."""
     words = [CFG_MAGIC, 0, SRC[src], pll_n, hdiv, width, burst, idle]
     setn = f"write_memory {CFG_ADDR + 0x2C:#x} 32 {n0:#x}; " if n0 is not None else ""
-    setn += f"write_memory {CFG_ADDR + 0x34:#x} 32 {ospeed}; "
+    setn += f"write_memory {CFG_ADDR + 0x34:#x} 32 {ospeed}; write_memory {CFG_ADDR + 0x38:#x} 32 {etm}; "
     cmd = ("init; reset halt; "
            f"write_memory {CFG_ADDR:#x} 32 {{{' '.join(hex(w) for w in words)}}}; " + setn +
-           f"puts \"CFG [read_memory {CFG_ADDR:#x} 32 13]\"; resume; shutdown")
+           f"puts \"CFG [read_memory {CFG_ADDR:#x} 32 16]\"; resume; shutdown")
     out = openocd(["-f", "board/stm32f4discovery.cfg",
                    "-c", "reset_config srst_only srst_nogate connect_assert_srst"], cmd)
     m = re.search(r"^CFG (.*)$", out, re.M)
     if not m:
         sys.exit("ST-LINK: нет ответа\n" + out[-1500:])
     v = [int(x, 16) for x in m[1].split()]
-    print(f"прошлый прогон: hclk {v[9]} Гц, err {v[10]}, отправлено {v[11]}, переприменений трассы {v[12]}")
+    print(f"прошлый прогон: hclk {v[9]} Гц, err {v[10]}, отправлено {v[11]}, переприменений трассы {v[12]}, "
+          f"ETMIDR {v[15]:08x}")
     base = {"hsi": 16e6, "hse": 8e6, "pll": pll_n * 0.5e6}[src]
     print(f"задано: {src} / {hdiv}, HCLK {base / hdiv / 1e3:g} кГц, TRACECLK ≈ {base / hdiv / 2e3:g} кГц, "
           f"порт {width} бит")
@@ -338,6 +339,230 @@ def itm(b):
     return vals, st
 
 
+def itm_packets(b):
+    """Пакеты ITM целиком, для показа: [(смещение, байты, описание)]."""
+    out, i = [], 0
+    while i < len(b):
+        h = b[i]
+        if h == 0:
+            j = i
+            while j < len(b) and b[j] == 0:
+                j += 1
+            if j < len(b) and b[j] == 0x80:
+                out.append((i, b[i:j + 1], "синхронизация"))
+                i = j + 1
+            else:
+                out.append((i, b[i:j], "нули"))
+                i = j
+        elif h == 0x70:
+            out.append((i, b[i:i + 1], "переполнение"))
+            i += 1
+        elif h & 3:
+            n = {1: 1, 2: 2, 3: 4}[h & 3]
+            v = int.from_bytes(b[i + 1:i + 1 + n], "little")
+            what = "аппаратный источник" if h & 4 else f"стимул-порт {h >> 3}"
+            out.append((i, b[i:i + 1 + n], f"{what}: {v:#0{2 + 2 * n}x} ({v})"))
+            i += 1 + n
+        else:
+            j = i + 1
+            if h & 0x80:
+                while j < len(b) and b[j] & 0x80:
+                    j += 1
+                j += 1
+            out.append((i, b[i:j], "метка времени / расширение"))
+            i = j
+    return out
+
+
+# ---- ETM (ETMv3.5, Cortex-M4): пакеты и инструкции ----
+# Правила — по OpenCSD (decoder/source/etmv3): атом P-заголовка — одна инструкция
+# (E — выполнена, N — не прошла по условию); пакет адреса ветвления идёт после
+# атома косвенного перехода и сжат относительно прошлого выданного адреса.
+OBJDUMP = os.path.expanduser("~/.local/opt/xpack-arm-none-eabi-gcc-15.2.1-1.1/bin/arm-none-eabi-objdump")
+ELF = os.path.join(HERE, "stm32", "trace.elf")
+COND = "(eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)?"
+
+
+def etm_packets(b, alt=True):
+    """Разбор потока ETM в пакеты: [{"off", "raw", "type", ...}]."""
+    out, i, last = [], 0, 0
+    synced = False
+    while i < len(b):
+        h, st = b[i], i
+        pk = {"off": i}
+        if not synced:  # до первой A-sync — пропуск
+            if h == 0:
+                j = i
+                while j < len(b) and b[j] == 0:
+                    j += 1
+                if j < len(b) and b[j] == 0x80 and j - i >= 5:
+                    synced = True
+                    out.append(dict(pk, raw=b[i:j + 1], type="A-sync"))
+                    i = j + 1
+                    continue
+            i += 1
+            continue
+        if h & 1:  # адрес ветвления
+            j, C, val, bits = i, True, 0, 0
+            exc = False
+            while C and j - i < 4 and j < len(b):
+                x = b[j]
+                C = bool(x & 0x80)
+                if j == i:
+                    v, n = (x & 0x7E) >> 1, 6
+                elif alt and not C:
+                    exc = bool(x & 0x40)
+                    v, n = x & 0x3F, 6
+                else:
+                    v, n = x & 0x7F, 7
+                val |= v << bits
+                bits += n
+                j += 1
+            if C and j < len(b):
+                x = b[j]
+                exc = bool(x & 0x40)
+                val |= (x & 0xF) << bits
+                bits += 4
+                j += 1
+            val <<= 1
+            bits += 1
+            e = None
+            if exc and j < len(b):  # байты исключения
+                e0 = b[j]
+                j += 1
+                e = (e0 >> 1) & 0xF
+                if e0 & 0x80 and j < len(b):
+                    e1 = b[j]
+                    j += 1
+                    if not e1 & 0x40:
+                        e |= (e1 & 0x1F) << 4
+                        if e1 & 0x80 and j < len(b):
+                            j += 1
+            mask = (1 << bits) - 1 if bits < 32 else 0xFFFFFFFF
+            last = (last & ~mask) | (val & mask)
+            pk.update(raw=b[i:j], type="ветвление", addr=last, exc=e)
+            i = j
+        elif h & 0x81 == 0x80:  # P-заголовок
+            if h & 3 == 0:
+                E, N = (h >> 2) & 0xF, (h >> 6) & 1
+                atoms = "E" * E + "N" * N
+            elif h & 3 == 2:
+                atoms = ("N" if h & 8 else "E") + ("N" if h & 4 else "E")
+            else:
+                atoms = ""
+            pk.update(raw=b[i:i + 1], type="P-заголовок", atoms=atoms)
+            i += 1
+        elif h == 0:
+            j = i
+            while j < len(b) and b[j] == 0:
+                j += 1
+            pk.update(raw=b[i:j + 1], type="A-sync")
+            i = j + 1
+        elif h == 0x08:  # I-sync: инфо, адрес (4), возможно LSiP
+            if i + 6 > len(b):
+                break
+            info = b[i + 1]
+            a = int.from_bytes(b[i + 2:i + 6], "little")
+            j = i + 6
+            if info & 0x80:
+                while j < len(b) and b[j] & 0x80:
+                    j += 1
+                j += 1
+            last = a & ~1
+            reason = ["периодическая", "трасса включена", "после переполнения", "выход из отладки"][(info >> 5) & 3]
+            pk.update(raw=b[i:j], type="I-sync", addr=last, thumb=a & 1, reason=reason)
+            i = j
+        elif h in (0x0C, 0x66, 0x7E, 0x76):
+            pk.update(raw=b[i:i + 1], type={0x0C: "триггер", 0x66: "пусто", 0x7E: "вход в исключение",
+                                            0x76: "выход из исключения"}[h])
+            i += 1
+        elif h & 0xFB == 0x42:  # метка времени
+            j = i + 1
+            while j < len(b) and b[j] & 0x80:
+                j += 1
+            pk.update(raw=b[i:j + 1], type="метка времени")
+            i = j + 1
+        else:
+            pk.update(raw=b[i:i + 1], type="неизвестный")
+            synced = False  # ждать A-sync
+            i += 1
+        out.append(pk)
+    return out
+
+
+def disasm(elf=ELF):
+    """{адрес: (размер, текст, вид, цель)}; вид: None, "direct", "indirect"."""
+    r = subprocess.run([OBJDUMP, "-d", elf], capture_output=True, text=True)
+    out, func = {}, ""
+    for line in r.stdout.splitlines():
+        m = re.match(r"^([0-9a-f]+) <(.*)>:$", line)
+        if m:
+            func = m[2]
+            continue
+        m = re.match(r"^\s*([0-9a-f]+):\t([0-9a-f ]+?)\s*\t(\S+)\s*(.*)$", line)
+        if not m:
+            continue
+        a = int(m[1], 16)
+        size = len(m[2].replace(" ", "")) // 2
+        mn, ops = m[3], m[4].split("@")[0].strip()
+        kind, tgt = None, None
+        if re.fullmatch(r"b(l)?" + COND + r"(\.n|\.w)?", mn) or mn in ("cbz", "cbnz"):
+            t = re.search(r"\b([0-9a-f]{7,8})\b", ops)
+            if t:
+                kind, tgt = "direct", int(t[1], 16)
+        elif mn in ("bx", "blx") or mn.startswith(("tbb", "tbh")):
+            kind = "indirect"
+        elif mn.startswith(("pop", "ldm")) and "pc" in ops:
+            kind = "indirect"
+        elif re.match(r"(ldr|mov)", mn) and ops.startswith("pc"):
+            kind = "indirect"
+        out[a] = (size, f"{mn}\t{ops}".strip(), kind, tgt, func)
+    return out
+
+
+def etm_instructions(pkts, dis):
+    """Восстановление выполненных инструкций: [(адрес, атом, текст, функция)] и
+    события (I-sync, ветвления) со сверкой адреса."""
+    rows, st = [], {"isync": 0, "isync_ok": 0, "isync_bad": 0, "lost": 0, "instr": 0, "E": 0, "N": 0}
+    addr = None
+    for p in pkts:
+        t = p["type"]
+        if t == "I-sync":
+            st["isync"] += 1
+            if addr is not None:
+                st["isync_ok" if addr == p["addr"] else "isync_bad"] += 1
+                if addr != p["addr"]:
+                    rows.append(("!", f"I-sync {p['addr']:#010x}, а декодер ждал {addr:#010x}"))
+            addr = p["addr"]
+            rows.append(("sync", f"I-sync {addr:#010x} ({p['reason']})"))
+        elif t == "ветвление":
+            addr = p["addr"]
+            rows.append(("br", f"адрес ветвления {addr:#010x}" + (f", исключение {p['exc']}" if p["exc"] else "")))
+        elif t == "P-заголовок":
+            for a in p["atoms"]:
+                if addr is None:
+                    break
+                ins = dis.get(addr)
+                if ins is None:
+                    rows.append(("!", f"нет инструкции по адресу {addr:#010x}"))
+                    st["lost"] += 1
+                    addr = None
+                    break
+                size, text, kind, tgt, func = ins
+                rows.append((addr, a, text, func))
+                st["instr"] += 1
+                st[a] += 1
+                if a == "E" and kind == "direct":
+                    addr = tgt
+                elif a == "E" and kind == "indirect":
+                    addr = None  # ждём пакет адреса
+                else:
+                    addr += size
+        elif t in ("вход в исключение", "выход из исключения"):
+            rows.append(("ex", t))
+    return rows, st
+
+
 def check(vals):
     gaps = [(a, b) for a, b in zip(vals, vals[1:]) if (b - a) & 0xFFFFFFFF != 1]
     return gaps
@@ -510,6 +735,80 @@ def cmd_lanes(a):
         print(f"TRACED{lane} " + "".join(f"{'+' if v[0] > 100 and v[1] == 0 else '.':>4}" for v in row.values()))
 
 
+def cmd_show(a):
+    """Итоговая трасса: пакеты ITM и ETM, восстановленные инструкции. Полный листинг —
+    в файл (--out), на экран — первые строки каждого уровня."""
+    if a.file:
+        d = json.load(open(a.file))
+        h, words = d["header"], d["words"]
+    else:
+        h, words = capture(2, 0, iodelay=[a.dly] * 4)
+        if a.save:
+            json.dump({"header": h, "words": words, "width": 4, "note": "show"}, open(a.save, "w"))
+    samples = nibbles_mode1(words)
+    off, data, st = tpiu(samples, 4)
+    lines = []
+    w = lines.append
+    t = 2 ** h["win_log2"] / F_OSC
+    w(f"Запись: {len(words)} слов = {len(samples)} полубайт, TRACECLK {h['tclk'] / t / 1e6:.2f} МГц, "
+      f"IODELAY {h['iodelay']}")
+    w(f"TPIU: синхронизаций полных {st['full']}, полуслов {st['half']}, кадров {st['frames']}; "
+      "байтов по ID: " + ", ".join(f"{k}: {len(v)}" for k, v in sorted(data.items(), key=lambda x: str(x[0]))))
+    itmb, etmb = bytes(data.get(1, b"")), bytes(data.get(2, b""))
+    vals, ist = itm(itmb)
+    gaps = check(vals)
+    w(f"ITM (ID 1): {len(vals)} значений счётчика, разрывов {len(gaps)}")
+    pk = etm_packets(etmb, alt=bool(a.alt))
+    dis = disasm()
+    rows, est = etm_instructions(pk, dis)
+    kinds = {}
+    for p in pk:
+        kinds[p["type"]] = kinds.get(p["type"], 0) + 1
+    w(f"ETM (ID 2): {len(etmb)} байт, пакетов {len(pk)}: " + ", ".join(f"{k} {v}" for k, v in kinds.items()))
+    w(f"инструкций {est['instr']} (E {est['E']}, N {est['N']}); I-sync {est['isync']}, из них сверено с "
+      f"декодером {est['isync_ok'] + est['isync_bad']}: совпало {est['isync_ok']}, нет {est['isync_bad']}; "
+      f"потерь адреса {est['lost']}")
+    head = list(lines)
+
+    def section(title, items, n):
+        w("")
+        w(f"=== {title} ===")
+        head.append("")
+        head.append(f"=== {title} (первые {n} из {len(items)}) ===")
+        for k, x in enumerate(items):
+            w(x)
+            if k < n:
+                head.append(x)
+
+    section("ITM: пакеты", [f"{o:6}  {r.hex(' '):20} {txt}" for o, r, txt in itm_packets(itmb)], a.n_itm)
+
+    def etm_txt(p):
+        x = p["type"]
+        if x == "P-заголовок":
+            x += f" {p['atoms']}"
+        elif x in ("ветвление", "I-sync"):
+            x += f" → {p['addr']:#010x} {func_of(dis, p['addr'])}"
+            if x.startswith("I-sync"):
+                x += f" ({p['reason']})"
+        return f"{p['off']:6}  {p['raw'].hex(' '):20} {x}"
+    section("ETM: пакеты", [etm_txt(p) for p in pk], a.n_etm)
+
+    def ins_txt(r):
+        if isinstance(r[0], int):
+            return f"  {r[0]:08x}  {r[1]}  {r[3]:12} {r[2]}"
+        return f"  -- {r[1]}"
+    section("ETM: инструкции", [ins_txt(r) for r in rows], a.n_ins)
+    print("\n".join(head))
+    if a.out:
+        open(a.out, "w").write("\n".join(lines) + "\n")
+        print(f"\nполный листинг: {a.out}")
+
+
+def func_of(dis, addr):
+    x = dis.get(addr)
+    return f"<{x[4]}>" if x else "<?>"
+
+
 def cmd_decode(a):
     if a.file.endswith(".hex"):  # кадр ER1 из симуляции (tb.v): заголовок + буфер
         w = [int(x.replace("x", "0"), 16) for x in open(a.file).read().split()]
@@ -572,6 +871,7 @@ def main():
     p.add_argument("--idle", type=int, default=64)
     p.add_argument("--n0", type=lambda x: int(x, 0), help="начальное значение счётчика ITM")
     p.add_argument("--ospeed", type=int, default=3, help="крутизна выводов трассы OSPEEDR 0..3")
+    p.add_argument("--etm", type=int, default=1, help="1 — трасса инструкций ETM (ID 2)")
     sub.add_parser("freq", help="частоты линий")
     p = sub.add_parser("cap", help="запись и разбор")
     p.add_argument("--mode", type=int, default=0)
@@ -600,6 +900,15 @@ def main():
     p.add_argument("--lane", type=int, nargs="+", default=[0, 1, 2, 3])
     p.add_argument("--dly", type=int, nargs="+", default=list(range(0, 256, 16)) + [255])
     p.add_argument("--out", default="lanes.json")
+    p = sub.add_parser("show", help="итоговая трасса: пакеты ITM/ETM и инструкции")
+    p.add_argument("--file", help="разобрать сохранённую запись вместо новой")
+    p.add_argument("--save", help="сохранить запись")
+    p.add_argument("--dly", type=int, default=32, help="IODELAY всех линий")
+    p.add_argument("--alt", type=int, default=1, help="альтернативное кодирование адреса ветвления (ETMIDR[20])")
+    p.add_argument("--out", default=os.path.join(HERE, "runs", "show.txt"))
+    p.add_argument("--n-itm", type=int, default=8)
+    p.add_argument("--n-etm", type=int, default=30)
+    p.add_argument("--n-ins", type=int, default=60)
     p = sub.add_parser("decode", help="разбор сохранённой записи")
     p.add_argument("file")
     p.add_argument("--width", type=int, default=4)
@@ -610,7 +919,7 @@ def main():
     p.add_argument("--width", type=int, default=4)
     a = ap.parse_args()
     if a.cmd == "stm":
-        stm_set(a.src, a.pll_n, a.hdiv, a.width, a.burst, a.idle, a.n0, a.ospeed)
+        stm_set(a.src, a.pll_n, a.hdiv, a.width, a.burst, a.idle, a.n0, a.ospeed, a.etm)
     elif a.cmd == "freq":
         cmd_freq(a)
     elif a.cmd == "cap":
@@ -621,6 +930,8 @@ def main():
         cmd_sweep2(a)
     elif a.cmd == "lanes":
         cmd_lanes(a)
+    elif a.cmd == "show":
+        cmd_show(a)
     elif a.cmd == "decode":
         cmd_decode(a)
     elif a.cmd == "encode":
