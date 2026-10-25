@@ -539,7 +539,7 @@ def etm_instructions(pkts, dis):
             addr = p["addr"]
             rows.append(("br", f"адрес ветвления {addr:#010x}" + (f", исключение {p['exc']}" if p["exc"] else "")))
         elif t == "P-заголовок":
-            for a in p["atoms"]:
+            for k, a in enumerate(p["atoms"]):
                 if addr is None:
                     break
                 ins = dis.get(addr)
@@ -549,7 +549,7 @@ def etm_instructions(pkts, dis):
                     addr = None
                     break
                 size, text, kind, tgt, func = ins
-                rows.append((addr, a, text, func))
+                rows.append((addr, a, text, func, p, k))
                 st["instr"] += 1
                 st[a] += 1
                 if a == "E" and kind == "direct":
@@ -804,6 +804,47 @@ def cmd_show(a):
         print(f"\nполный листинг: {a.out}")
 
 
+def cmd_table(a):
+    """Кусок трассы таблицей Markdown: строка исходника → инструкция → пакет ETM и атом →
+    что сделал декодер. Окно — с n-го (--skip) появления адреса --start, --count инструкций."""
+    d = json.load(open(a.file))
+    samples = nibbles_mode1(d["words"])
+    _, data, _ = tpiu(samples, 4)
+    pk = etm_packets(bytes(data.get(2, b"")), alt=True)
+    dis = disasm()
+    rows = [r for r in etm_instructions(pk, dis)[0] if isinstance(r[0], int)]
+    hits = [i for i, r in enumerate(rows) if r[0] == a.start]
+    if len(hits) <= a.skip:
+        sys.exit(f"адрес {a.start:#x} встречается {len(hits)} раз")
+    win = rows[hits[a.skip]:hits[a.skip] + a.count]
+    a2l = subprocess.run([OBJDUMP.replace("objdump", "addr2line"), "-e", ELF] + [hex(r[0]) for r in win],
+                         capture_output=True, text=True).stdout.splitlines()
+    a2l = [x.split(" (")[0] for x in a2l]  # «(discriminator N)»
+    src = open(os.path.join(HERE, "stm32", "main.c")).read().splitlines()
+    print("| Исходник `main.c` | Адрес | Инструкция | Пакет ETM (смещение: байт) | Атом | Декодер |")
+    print("|---|---|---|---|---|---|")
+    prev_line, prev_pk = None, None
+    for r, loc in zip(win, a2l):
+        addr, atom, text, func, p, k = r
+        ln = int(loc.split(":")[-1]) if loc.split(":")[-1].isdigit() else 0
+        code = f"{ln}: `{src[ln - 1].strip()}`" if ln and ln != prev_line else ""
+        prev_line = ln
+        n = len(p["atoms"])
+        pkt = f"{p['off']}: `{p['raw'].hex()}` = {p['atoms']}" if p is not prev_pk else "″"
+        prev_pk = p
+        size, _, kind, tgt, _ = dis[addr]
+        if atom == "E" and kind == "direct":
+            nxt = f"переход → {tgt:08x}"
+        elif atom == "E" and kind == "indirect":
+            nxt = "ждать адрес ветвления"
+        elif kind:
+            nxt = f"не выполнен → {addr + size:08x}"
+        else:
+            nxt = "дальше"
+        ins = text.split("<")[0].strip().replace("\t", " ")
+        print(f"| {code} | `{addr:08x}` | `{ins}` | {pkt} | {atom} ({k + 1}/{n}) | {nxt} |")
+
+
 def func_of(dis, addr):
     x = dis.get(addr)
     return f"<{x[4]}>" if x else "<?>"
@@ -909,6 +950,11 @@ def main():
     p.add_argument("--n-itm", type=int, default=8)
     p.add_argument("--n-etm", type=int, default=30)
     p.add_argument("--n-ins", type=int, default=60)
+    p = sub.add_parser("table", help="кусок трассы: исходник → инструкция → пакет ETM (Markdown)")
+    p.add_argument("file")
+    p.add_argument("--start", type=lambda x: int(x, 0), default=0x8000356)
+    p.add_argument("--skip", type=int, default=0, help="какое по счёту появление адреса взять")
+    p.add_argument("--count", type=int, default=24)
     p = sub.add_parser("decode", help="разбор сохранённой записи")
     p.add_argument("file")
     p.add_argument("--width", type=int, default=4)
@@ -932,6 +978,8 @@ def main():
         cmd_lanes(a)
     elif a.cmd == "show":
         cmd_show(a)
+    elif a.cmd == "table":
+        cmd_table(a)
     elif a.cmd == "decode":
         cmd_decode(a)
     elif a.cmd == "encode":
