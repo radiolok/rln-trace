@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Состояние образа usb3ref (ciniml/board/top.v) по JTAG ER1: LTSSM, история состояний, счётчики.
-Через нашу FT2232H и OpenOCD (tools/slogic/uprobe). Раскладка полей ER1 — из host/usb3_status.py ciniml (BSL-1.0).
+"""Состояние образов usb3ref (ciniml/board/top.v) и usb3d по JTAG: ER1 — LTSSM, история состояний, счётчики;
+ER2 у usb3d — журнал заголовков пакетов. Через нашу FT2232H и OpenOCD (tools/slogic/uprobe). Раскладка ER1 и
+разбор заголовков — из host/usb3_status.py и usb3_trace.py ciniml (BSL-1.0).
 
-    RLN_FPGA_USB=1-2 python3 u3status.py          # один кадр
-    RLN_FPGA_USB=1-2 python3 u3status.py -w 1     # кадр раз в секунду
+    RLN_FPGA_USB=1-2 python3 u3status.py            # один кадр
+    RLN_FPGA_USB=1-2 python3 u3status.py -w 1       # кадр раз в секунду
+    RLN_FPGA_USB=1-2 python3 u3status.py log        # журнал заголовков (usb3d): 128 записей с первого U0
+    RLN_FPGA_USB=1-2 python3 u3status.py rearm 3    # журнал заново; 3 — кольцо пакетов EP1 IN до события
+                                                    # Usb3Device (ACK без ответа, повтор, потеря) и 64 после
 """
 import argparse
 import os
@@ -65,10 +69,80 @@ def show(s):
           f"чётности {s['disp_err']}")
 
 
+L2 = 192          # ER2 usb3d: бит 191 = 1 — запись, [190:160] — слово команды
+MAGIC2 = 0x5B34
+TP_SUB = {1: "ACK", 2: "NRDY", 3: "ERDY", 4: "STATUS", 5: "STALL", 6: "DEV_NOTIFY", 7: "PING", 8: "PING_RSP"}
+LMP_SUB = {1: "SetLinkFunction", 2: "U2InactivityTimeout", 3: "VendorTest", 4: "PortCapability",
+           5: "PortConfiguration", 6: "PortConfigResponse"}
+
+
+def decode_hdr(h):
+    dw0, dw1, dw2 = h & 0xFFFFFFFF, (h >> 32) & 0xFFFFFFFF, (h >> 64) & 0xFFFFFFFF
+    typ, addr, route = dw0 & 0x1F, dw0 >> 25, (dw0 >> 5) & 0xFFFFF
+    if typ == 0x00:
+        sub = (dw0 >> 5) & 0xF
+        return f"LMP {LMP_SUB.get(sub, sub)} dw0={dw0:08x} dw1={dw1:08x} dw2={dw2:08x}"
+    if typ == 0x04:
+        return (f"TP  {TP_SUB.get(dw1 & 0xF, dw1 & 0xF):8s} addr={addr} route={route:x} ept={(dw1 >> 8) & 0xF} "
+                f"dir={(dw1 >> 7) & 1} rty={(dw1 >> 6) & 1} nump={(dw1 >> 16) & 0x1F} seq={(dw1 >> 21) & 0x1F}")
+    if typ == 0x08:
+        return (f"DP  addr={addr} route={route:x} seq={dw1 & 0x1F} eob={(dw1 >> 6) & 1} dir={(dw1 >> 7) & 1} "
+                f"ept={(dw1 >> 8) & 0xF} setup={(dw1 >> 15) & 1} len={dw1 >> 16}")
+    if typ == 0x1F:  # кольцо: состояние EP1 IN Usb3Device
+        st = dw2 << 32 | dw1
+        return (f"    EP1 IN: seq_in={st & 0x1F} limit={(st >> 5) & 0x1F} nsent={(st >> 10) & 0x1F} "
+                f"ack={(st >> 15) & 0xF} ready={(st >> 19) & 0xFFFF:016b} stop={(st >> 36) & 1} flow={(st >> 37) & 1}")
+    return f"type {typ:02x} {dw0:08x} {dw1:08x} {dw2:08x}"
+
+
+def er2_scans(words):
+    """Сканы ER2 с записью слов команды; каждый скан возвращает снимок до своей записи."""
+    cmds = []
+    for w in words:
+        cmds += ["irscan gw5a.tap 0x43", f'puts "R [drscan gw5a.tap {L2} {(1 << (L2 - 1)) | (w << (L2 - 32)):#x}]"']
+    out = u.openocd(cmds)
+    res = []
+    for r in re.findall(r"^R (\S+)$", out, re.M):
+        raw = int(r, 16)
+        for off in range(8):
+            if (raw >> off) & 0xFFFF == MAGIC2:
+                res.append(raw >> off)
+                break
+        else:
+            sys.exit(f"нет метки 0x{MAGIC2:04x} в ER2: загружен не usb3d?")
+    return res
+
+
+def cmd_log():
+    snaps = er2_scans(list(range(128)) + [0])[1:]   # снимок k — запись, номер которой задан сканом k - 1
+    v = snaps[-1]
+    hwp, mode, wrap, frz = (v >> 144) & 0xFF, (v >> 152) & 3, (v >> 154) & 1, (v >> 155) & 1
+    n = 128 if hwp & 0x80 else hwp & 0x7F
+    order = [(hwp + i) & 0x7F for i in range(128)] if wrap else list(range(n))
+    print(f"журнал: режим {mode}, записей {n if not wrap else 128}{', кольцо прошло круг' if wrap else ''}"
+          f"{', стоит' if frz else ''}")
+    t0 = None
+    for i in order:
+        s = snaps[i]
+        if (s >> 16) & 0x7F != i:
+            print(f"  (номер записи {(s >> 16) & 0x7F} вместо {i})")
+        e = (s >> 23) & ((1 << 121) - 1)
+        tx, ts, h = e >> 120, (e >> 96) & 0xFFFFFF, e & ((1 << 96) - 1)
+        t0 = ts if t0 is None else t0
+        print(f"{i:3d} {((ts - t0) & 0xFFFFFF) * 8e-3:10.3f} мкс {'→' if tx else '←'} {decode_hdr(h)}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-w", type=float, metavar="СЕК", help="читать с периодом")
+    ap.add_argument("cmd", nargs="?", choices=("log", "rearm"))
+    ap.add_argument("mode", nargs="?", type=int, default=1, help="rearm: режим журнала (3 — кольцо EP1 IN)")
     a = ap.parse_args()
+    if a.cmd == "log":
+        return cmd_log()
+    if a.cmd == "rearm":
+        er2_scans([1 << 30 | (a.mode & 3) << 28])
+        return print(f"журнал заново, режим {a.mode & 3}")
     while True:
         show(read())
         if not a.w:

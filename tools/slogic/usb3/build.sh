@@ -5,7 +5,8 @@
 #
 # pclk 125 МГц на GW5AT-15 закрывается не в каждой расстановке, а зерна у PnR Gowin нет: варианты PnR (place_option
 # 1..4) собираются параллельно, в usb3ref.fs идёт тот, у которого pclk выше.
-#   sh build.sh                                   → usb3ref.fs  (эталонный верх ciniml/board/top.v), 4 варианта
+#   sh build.sh d                                 → usb3d.fs    (свой верх usb3d.v: регистры, поток трассы), 4 варианта
+#   sh build.sh                                   → usb3ref.fs  (эталонный верх ciniml/board/top.v)
 #   PLACE="3 4" sh build.sh                       — только эти place_option
 #   PNR_EXTRA="replicate_resources=1" sh build.sh — добавить опции ко всем вариантам
 set -e
@@ -14,7 +15,13 @@ GW=/mnt/c/Gowin/Gowin_V1.9.12.04_x64/IDE
 IPC=$GW/ipcore/SERDES_IP
 B=/mnt/c/Users/Public/rln-usb3
 WB='C:\Users\Public\rln-usb3'
-N=usb3ref
+if [ "${1:-}" = d ]; then
+    N=usb3d; TOPM=usb3d
+    TOPF="$HERE/usb3d.v"; CST="$HERE/usb3d.cst"; SDC="$HERE/usb3d.sdc"
+else
+    N=usb3ref; TOPM=top
+    TOPF="$HERE/ciniml/board/top.v"; CST="$HERE/ciniml/board/pins.cst"; SDC="$HERE/ciniml/board/timing.sdc"
+fi
 PLACE=${PLACE:-"1 2 3 4"}
 mkdir -p "$B/ip" "$B/upar" "$B/phy"
 
@@ -49,15 +56,18 @@ build_one() {
     D="$B/${N}_$1"
     rm -rf "${D:?}"; mkdir -p "$D"
     for f in $U; do cp "$HERE/ciniml/rtl/usb3/$f.sv" "$D/"; done
-    cp "$C/top.v" "$C/pll_ref125.v" "$C/jtag_status.v" "$C/pins.cst" "$C/timing.sdc" "$C/serdes.csr" \
+    cp "$TOPF" "$D/top.v"; cp "$CST" "$D/pins.cst"; cp "$SDC" "$D/timing.sdc"
+    cp "$HERE/u3stream.v" "$HERE/afifo.v" "$D/"
+    cp "$C/pll_ref125.v" "$C/jtag_status.v" "$C/serdes.csr" \
        "$B/ip/serdes.v" "$B/upar_arbiter.vg" "$B/usb3_0_phy.vg" "$GW/data/ipcores/gw_jtag.v" "$D/"
     echo "// пусто: TRACE и прочие define эталона не используются" > "$D/defines_gen.v"
     { echo "set_device GW5AT-LV15MG132C1/I0 -device_version B"
       for f in defines_gen.v top.v pll_ref125.v; do echo "add_file $f"; done
+      [ "$N" = usb3d ] && echo "add_file u3stream.v" && echo "add_file afifo.v"
       for f in $U; do echo "add_file $f.sv"; done
       for f in jtag_status.v serdes.v upar_arbiter.vg usb3_0_phy.vg gw_jtag.v pins.cst timing.sdc; do echo "add_file $f"; done
       echo "set_csr serdes.csr"
-      echo "set_option -top_module top"
+      echo "set_option -top_module $TOPM"
       echo "set_option -output_base_name $N"
       echo "set_option -verilog_std sysv2017"
       for o in done ready cpu i2c sspi; do echo "set_option -use_${o}_as_gpio 1"; done

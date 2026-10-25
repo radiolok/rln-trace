@@ -35,6 +35,9 @@ doc/baikal/*.tar.gz
 tools/slogic/usb2/*.fs
 tools/slogic/usb3/*.fs
 tools/slogic/usb3/ciniml/rtl/usb3/Veryl.lock
+tools/slogic/usb3/sim/*.vcd
+tools/slogic/usb3/sim/*.vvp
+tools/slogic/usb3/sim/lint_core.txt
 tools/slogic/uprobe/tb
 # симуляция ядра Daisho
 tools/slogic/usb2/sim/*.vcd
