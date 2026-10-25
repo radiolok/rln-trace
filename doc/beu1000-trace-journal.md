@@ -7,14 +7,17 @@ RISC-V N-Trace через PIB (Pin Interface Block). Блоки **«Для ст�
 
 Источники:
 
-- [`doc/baikal/BE_U1000_tech_v_1_8.pdf`](baikal/BE_U1000_tech_v_1_8.pdf) — даташит МК (ID BE-U-DS-RU#1737, v1.8);
-- [`doc/baikal/EVU-BA-2.5_Tech.pdf`](baikal/EVU-BA-2.5_Tech.pdf) — описание платы (BE-U-TD-RU#1734, v2.5.4), на
+- [BE_U1000_tech_v_1_8.pdf](https://mcu.baikalelectronics.ru/storage/files/BE_U1000_tech_v_1_8.pdf) — даташит МК (ID BE-U-DS-RU#1737, v1.8);
+- [EVU-BA-2.5_Tech.pdf](https://mcu.baikalelectronics.ru/storage/files/EVU-BA-2.5_Tech.pdf) — описание платы (BE-U-TD-RU#1734, v2.5.4), на
   стр. 24–28 — **принципиальная схема** (листы 1–5 из 7; без неё вывод про QSPI-флеш ниже не
   получился бы);
-- [`doc/baikal/BE-U1000_RM_v.1.3.0.pdf`](baikal/BE-U1000_RM_v.1.3.0.pdf) — Reference Manual (BE-U-RM#1740,
+- [BE-U1000_RM_v.1.3.0.pdf](https://mcu.baikalelectronics.ru/storage/files/BE-U1000_RM_v.1.3.0.pdf) — Reference Manual (BE-U-RM#1740,
   v1.3.0): гл. 5 — CRU (такты, выводы), гл. 16 — Tracer;
-- Baikal MCU SDK 2.3.0 (`doc/baikal/mcu-sdk-linux_2.3.0_20260703.tar.gz`, распакован в
-  `~/.local/opt/baikal-mcu-sdk-2.3.0`): OpenOCD с конфигами BE-U1000, тулчейн `riscv32-none-elf` (GCC 15.2);
+- Baikal MCU SDK — подмодуль [`au/mcu-sdk`](../au/mcu-sdk) (тег 2.4.0, [gitflic](https://gitflic.ru/project/baikalelectronics/mcu-sdk)):
+  OpenOCD с конфигами BE-U1000 лежит в нём самом, тулчейн `riscv32-none-elf` (GCC 15.2) — вложенный
+  подмодуль на 1,7 ГБ, на Linux — тег `2.4.0_lin` (см. [`au/README.md`](../au/README.md)). Начинали с
+  архива SDK 2.3.0 с сайта Байкала (распакован в `~/.local/opt/baikal-mcu-sdk-2.3.0`; тот же OpenOCD,
+  компилятор даёт побайтно тот же код прошивки) — инструменты берут его, если подмодуль не развёрнут;
 - [`au/riscv-nexus-trace`](../au/riscv-nexus-trace) — подмодуль со спецификациями RISC-V Trace Control
   Interface (регистры) и N-Trace (протокол), там же эталонный кодер/декодер `refcode/c/NexRv*`.
 
@@ -301,14 +304,9 @@ RISC-V N-Trace через PIB (Pin Interface Block). Блоки **«Для ст�
 
 ## Стенд
 
-```
-                       USB-C XS2 (питание, FTDI DD7: JTAG + UART0)          USB (питание)
- ПК (WSL) ◄──────────────────────────── EVU-BA-2.5                 ПК ◄──────────── SLogic16U3
-    ▲                                    │ BE-U1000                                    ▲
-    │                     XP10: PB0–PB3 PIB_D[0..3], PB4 PIB_CLK, GND ─── CH8–CH12, GND┘
-    │ USB
-    └──── FT2232H ── канал A: JTAG ───────────────────────────────── отладочный разъём SLogic
-```
+![Стенд трассы BE-U1000](img/beu1000-trace-bench.svg)
+
+*Схема — `tools/diagrams/beu1000_bench.py` (подписи поверх раскладки стенда прозвонки).*
 
 | EVU-BA-2.5, XP10 | Вывод МК (корпус QFN-88) | Функция (АФ4 порта PB) | SLogic | Шарик ПЛИС |
 |---|---|---|---|---|
@@ -398,6 +396,9 @@ python3 beu1000/ocd.py --stop
 - `trace.py` и `openFPGALoader` без указания адаптера берут первую FT2232H — может оказаться плата;
 - `pkill -f` по имени конфига убивает и собственный шелл (в его командной строке та же строка);
 - `set_mem_access` из `taps.cfg` SDK применяется к последней созданной цели (CORE_2), не к CORE_0;
+- Windows видит SLogic16U3 как неизвестное устройство 0000:0002 — так и должно быть: USB у прибора
+  делает сама ПЛИС, а в образе `tracela` его нет; заводской анализатор возвращается передёргиванием
+  питания (образ — только в SRAM);
 - адреса переменных прошивки сдвигаются при правках `main.c` — смотреть `nm fw/trace.elf`;
 - компилятор вставляет свои условные переходы (`beqz len`, проверка `pat`) — их исходы тоже в HIST;
 - стандартный `EVU_BA_2_5.cfg` SDK после сброса выводит PIB_CLK ещё и на PC4 (`IOAFCR4` = 0x88858888) —

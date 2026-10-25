@@ -15,8 +15,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SDK = os.path.join(os.environ.get("BAIKAL_SDK", os.path.expanduser("~/.local/opt/baikal-mcu-sdk-2.3.0")),
-                   "Tools", "OpenOCD")
+# OpenOCD — из подмодуля au/mcu-sdk (бинарник лежит в репозитории SDK); BAIKAL_SDK — другой SDK.
+SDK_DIR = os.environ.get("BAIKAL_SDK") or os.path.normpath(os.path.join(HERE, "..", "..", "..", "..", "au", "mcu-sdk"))
+SDK = os.path.join(SDK_DIR, "Tools", "OpenOCD")
 PORT = 6668
 LOG = os.path.join(HERE, "openocd.log")
 

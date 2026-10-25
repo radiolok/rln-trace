@@ -162,8 +162,12 @@ def fmt_msg(tcode, f):
 # ---- путь программы по ELF ----
 
 ELF = os.path.join(HERE, "fw", "trace.elf")
-OBJDUMP = os.path.expanduser("~/.local/opt/baikal-mcu-sdk-2.3.0/Tools/toolchain/riscv32-none-elf/bin/"
-                             "riscv32-none-elf-objdump")
+# objdump — из тулчейна в подмодуле au/mcu-sdk, иначе из архива SDK 2.3.0 (как в fw/Makefile)
+OBJDUMP = os.path.normpath(os.path.join(HERE, "..", "..", "..", "..", "au", "mcu-sdk", "Tools", "toolchain", "bin",
+                                        "riscv32-none-elf-objdump"))
+if not os.path.exists(OBJDUMP):
+    OBJDUMP = os.path.expanduser("~/.local/opt/baikal-mcu-sdk-2.3.0/Tools/toolchain/riscv32-none-elf/bin/"
+                                 "riscv32-none-elf-objdump")
 COND = {"beq", "bne", "blt", "bge", "bltu", "bgeu", "beqz", "bnez", "blez", "bgez", "bltz", "bgtz",
         "bgt", "ble", "bgtu", "bleu", "c.beqz", "c.bnez"}
 DJUMP = {"j", "jal", "c.j", "c.jal"}

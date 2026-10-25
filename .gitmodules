@@ -34,3 +34,7 @@
 	path = au/riscv-nexus-trace
 	url = https://github.com/riscv-non-isa/riscv-nexus-trace
 	shallow = true
+[submodule "au/mcu-sdk"]
+	path = au/mcu-sdk
+	url = https://gitflic.ru/project/baikalelectronics/mcu-sdk.git
+	shallow = true
