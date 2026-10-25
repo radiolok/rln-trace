@@ -37,8 +37,9 @@
 // (slogic16u3.cst). For 1.8 V targets (~0.85 V at the ball) the margin is thin:
 // LVCMOS12UD33 or a VREF input (internal VREF 0.6/0.75/0.9 V) - not yet tried.
 //
-// Trace port (2026-10-25: TPIU from STM32F407 received clean up to TRACECLK 3.96 MHz by
-// oversampling at OSCB, tools/slogic/trace; not yet clocked from TRACECLK):
+// Trace port (2026-10-25, tools/slogic/trace: TPIU from STM32F407 received clean up to TRACECLK
+// 57 MHz with IODELAY -> IDDR clocked by TRACECLK itself; above that the 10 cm analyser harness
+// fails on simultaneous switching of all data lines):
 //   TRACECLK      ch[12]   N9, GCLKT_2 and BPLL_T_IN0: global clock and PLL input
 //   TRACED0..3    ch[8..11]
 //   the rest      event inputs (PPS, triggers)

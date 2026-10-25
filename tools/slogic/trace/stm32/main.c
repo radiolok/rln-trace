@@ -57,6 +57,7 @@ struct cfg {  // смещения — в trace.py (CFG_*)
     uint32_t err;      // 0x28 бит 0 — HSE не запустился, 1 — PLL, 2 — неверный hdiv
     uint32_t n;        // 0x2C следующее значение счётчика
     uint32_t reinit;   // 0x30 сколько раз переприменялась настройка трассы
+    uint32_t ospeed;   // 0x34 крутизна выводов PE2..PE6 (OSPEEDR): 0 — низкая … 3 — очень высокая
 };
 #define CFG ((volatile struct cfg *)0x20000000)
 
@@ -133,9 +134,10 @@ static void apply_trace(void)
     uint32_t w = CFG->width;
     if (w != 1 && w != 2)
         w = 4;
-    // PE2..PE6 — AF0 (TRACECLK, TRACED0..3), самая быстрая крутизна
+    // PE2..PE6 — AF0 (TRACECLK, TRACED0..3), крутизна из cfg
+    uint32_t sp = CFG->ospeed > 3 ? 3 : CFG->ospeed;
     REG(GPIOE + AFRL) &= ~0x0FFFFF00u;
-    REG(GPIOE + OSPEEDR) |= 0x3FF0u;
+    REG(GPIOE + OSPEEDR) = (REG(GPIOE + OSPEEDR) & ~0x3FF0u) | sp * 0x1550u;
     REG(GPIOE + MODER) = (REG(GPIOE + MODER) & ~0x3FF0u) | 0x2AA0u;
     // синхронный порт: TRACE_IOEN, TRACE_MODE 1/2/3 = 1/2/4 бита
     DBGMCU_CR = (DBGMCU_CR & ~0xE0u) | 1u << 5 | (w == 4 ? 3u : w) << 6;
@@ -171,6 +173,7 @@ void reset(void)
         CFG->seq = 0;
         CFG->n = 0;
         CFG->reinit = 0;
+        CFG->ospeed = 3;
         CFG->magic = MAGIC;
     }
     apply_clock();

@@ -1,0 +1,152 @@
+[
+ {
+  "point": "pll:216:1",
+  "tclk_hz": 53305191.07142857,
+  "dly": {
+   "0": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13179,
+     "full": 118,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   }
+  }
+ },
+ {
+  "point": "pll:232:1",
+  "tclk_hz": 57261539.28571428,
+  "dly": {
+   "0": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13415,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 893,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13359,
+     "full": 0,
+     "frames": 377,
+     "phase": 7
+    },
+    "samples": 65536
+   }
+  }
+ },
+ {
+  "point": "pll:248:1",
+  "tclk_hz": 61213162.49999999,
+  "dly": {
+   "0": {
+    "values": 513,
+    "gaps": 4,
+    "tpiu": {
+     "half": 7752,
+     "full": 0,
+     "frames": 1078,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13415,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 876,
+    "gaps": 2,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   }
+  }
+ }
+]

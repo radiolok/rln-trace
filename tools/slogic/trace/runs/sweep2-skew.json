@@ -1,0 +1,774 @@
+[
+ {
+  "point": "pll:336:16",
+  "tclk_hz": 5184183.928571428,
+  "dly": {
+   "0": {
+    "values": 879,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13408,
+     "full": 0,
+     "frames": 371,
+     "phase": 5
+    },
+    "samples": 65536
+   },
+   "16": {
+    "values": 879,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13402,
+     "full": 0,
+     "frames": 371,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "48": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "80": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "112": {
+    "values": 884,
+    "gaps": 18,
+    "tpiu": {
+     "half": 13393,
+     "full": 0,
+     "frames": 373,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "128": {
+    "values": 112,
+    "gaps": 111,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "144": {
+    "values": 161,
+    "gaps": 160,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 1
+    },
+    "samples": 65536
+   },
+   "160": {
+    "values": 8,
+    "gaps": 7,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "176": {
+    "values": 1,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "192": {
+    "values": 0,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13150,
+     "full": 29,
+     "frames": 396,
+     "phase": 3
+    },
+    "samples": 65536
+   },
+   "208": {
+    "values": 0,
+    "gaps": 0,
+    "tpiu": {
+     "half": 0,
+     "full": 2381,
+     "frames": 1452,
+     "phase": 3
+    },
+    "samples": 65536
+   },
+   "224": {
+    "values": 0,
+    "gaps": 0,
+    "tpiu": {
+     "half": 303,
+     "full": 56,
+     "frames": 1995,
+     "phase": 1
+    },
+    "samples": 65536
+   },
+   "240": {
+    "values": 0,
+    "gaps": 0,
+    "tpiu": {
+     "half": 286,
+     "full": 55,
+     "frames": 1998,
+     "phase": 0
+    },
+    "samples": 65536
+   },
+   "255": {
+    "values": 0,
+    "gaps": 0,
+    "tpiu": {
+     "half": 304,
+     "full": 0,
+     "frames": 2010,
+     "phase": 0
+    },
+    "samples": 65536
+   }
+  }
+ },
+ {
+  "point": "pll:200:8",
+  "tclk_hz": 6170812.499999999,
+  "dly": {
+   "0": {
+    "values": 886,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13384,
+     "full": 0,
+     "frames": 374,
+     "phase": 3
+    },
+    "samples": 65536
+   },
+   "16": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 883,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13390,
+     "full": 0,
+     "frames": 373,
+     "phase": 3
+    },
+    "samples": 65536
+   },
+   "48": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "80": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13179,
+     "full": 118,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 881,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13396,
+     "full": 0,
+     "frames": 372,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "112": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "128": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "144": {
+    "values": 881,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13399,
+     "full": 0,
+     "frames": 372,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "160": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "176": {
+    "values": 881,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13405,
+     "full": 0,
+     "frames": 372,
+     "phase": 0
+    },
+    "samples": 65536
+   },
+   "192": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13179,
+     "full": 118,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "208": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "224": {
+    "values": 886,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13381,
+     "full": 0,
+     "frames": 374,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "240": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "255": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   }
+  }
+ },
+ {
+  "point": "pll:100:4",
+  "tclk_hz": 6171201.785714285,
+  "dly": {
+   "0": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "16": {
+    "values": 884,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13389,
+     "full": 0,
+     "frames": 373,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "48": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "80": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "112": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "128": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "144": {
+    "values": 886,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13383,
+     "full": 0,
+     "frames": 374,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "160": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13415,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "176": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13179,
+     "full": 118,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "192": {
+    "values": 893,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13359,
+     "full": 0,
+     "frames": 377,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "208": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "224": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "240": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13179,
+     "full": 118,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "255": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13409,
+     "full": 0,
+     "frames": 371,
+     "phase": 5
+    },
+    "samples": 65536
+   }
+  }
+ },
+ {
+  "point": "hsi:0:1",
+  "tclk_hz": 7910467.857142856,
+  "dly": {
+   "0": {
+    "values": 881,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13401,
+     "full": 0,
+     "frames": 372,
+     "phase": 5
+    },
+    "samples": 65536
+   },
+   "16": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "32": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "48": {
+    "values": 882,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13402,
+     "full": 0,
+     "frames": 372,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "64": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13415,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "80": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13415,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "96": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "112": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13415,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "128": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13414,
+     "full": 0,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "144": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "160": {
+    "values": 893,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13359,
+     "full": 0,
+     "frames": 377,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "176": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13179,
+     "full": 118,
+     "frames": 370,
+     "phase": 7
+    },
+    "samples": 65536
+   },
+   "192": {
+    "values": 877,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 4
+    },
+    "samples": 65536
+   },
+   "208": {
+    "values": 879,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13403,
+     "full": 0,
+     "frames": 371,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "224": {
+    "values": 893,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13359,
+     "full": 0,
+     "frames": 377,
+     "phase": 6
+    },
+    "samples": 65536
+   },
+   "240": {
+    "values": 878,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13412,
+     "full": 0,
+     "frames": 371,
+     "phase": 2
+    },
+    "samples": 65536
+   },
+   "255": {
+    "values": 876,
+    "gaps": 0,
+    "tpiu": {
+     "half": 13413,
+     "full": 0,
+     "frames": 370,
+     "phase": 6
+    },
+    "samples": 65536
+   }
+  }
+ }
+]

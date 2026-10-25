@@ -2,6 +2,7 @@
 set_device GW5AT-LV15MG132C1/I0 -device_version B
 add_file tracela.v
 add_file tracela.cst
+add_file tracela.sdc
 set_option -top_module top
 set_option -output_base_name tracela
 set_option -verilog_std v2001

@@ -24,3 +24,4 @@ tools/slogic/trace/stm32/trace.elf
 # симуляция приёмника трассы: синтетический поток и кадры ER1
 tools/slogic/trace/gw/stream.hex
 tools/slogic/trace/gw/tb_m*.hex
+tools/slogic/trace/gw/tb.fst

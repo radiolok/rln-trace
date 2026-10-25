@@ -7,7 +7,8 @@
     python3 trace.py stm --src hsi --hdiv 512 --width 4   # режим источника (ядро под сбросом)
     python3 trace.py freq                                  # частоты линий по частотомеру образа
     python3 trace.py cap --mode 0 --save run.json          # смены уровней: фаза данных, разбор
-    python3 trace.py cap --mode 1 --dly 20                 # выборка по фронту TRACECLK
+    python3 trace.py cap --mode 1 --dly 20                 # выборка по фронту TRACECLK (OSCB)
+    python3 trace.py cap --mode 2 --dly 0                  # IDDR от TRACECLK, IODELAY 0..255
     python3 trace.py decode run.json                       # разбор сохранённой записи
     python3 trace.py encode --out stream.hex               # синтетический поток для tb.v
 """
@@ -25,7 +26,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 OPENOCD = os.path.expanduser("~/.local/opt/oss-cad-suite/bin/openocd")
 F_OSC = 2 ** 26 / 2.24  # OSCB "210"/4 на GW5AT-15 — ~30 МГц (измерено при прозвонке, journal Э3)
-H = 10  # слов заголовка ER1
+H = 14  # слов заголовка ER1
 MAGIC = 0x414E4C52  # "RLNA"
 
 FPGA_CFG = """adapter driver ftdi
@@ -50,10 +51,14 @@ def openocd(args, cmd, timeout=60):
     return r.stdout + r.stderr
 
 
-def stm_set(src, pll_n, hdiv, width, burst, idle):
+def stm_set(src, pll_n, hdiv, width, burst, idle, n0=None, ospeed=3):
+    """n0 — начальное значение счётчика ITM (поле n), иначе продолжает с прошлого;
+    ospeed — крутизна выводов трассы (OSPEEDR 0..3)."""
     words = [CFG_MAGIC, 0, SRC[src], pll_n, hdiv, width, burst, idle]
+    setn = f"write_memory {CFG_ADDR + 0x2C:#x} 32 {n0:#x}; " if n0 is not None else ""
+    setn += f"write_memory {CFG_ADDR + 0x34:#x} 32 {ospeed}; "
     cmd = ("init; reset halt; "
-           f"write_memory {CFG_ADDR:#x} 32 {{{' '.join(hex(w) for w in words)}}}; "
+           f"write_memory {CFG_ADDR:#x} 32 {{{' '.join(hex(w) for w in words)}}}; " + setn +
            f"puts \"CFG [read_memory {CFG_ADDR:#x} 32 13]\"; resume; shutdown")
     out = openocd(["-f", "board/stm32f4discovery.cfg",
                    "-c", "reset_config srst_only srst_nogate connect_assert_srst"], cmd)
@@ -112,7 +117,9 @@ def header(w):
     return {"ver": w[1] & 0xFF, "depth_log2": w[1] >> 8 & 0xFF, "win_log2": w[1] >> 16 & 0xFF,
             "seq": w[1] >> 24, "cmd": w[2], "wptr": st & 0x1FFFF, "mode": st >> 28 & 3,
             "run": st >> 30 & 1, "full": st >> 31, "miss": w[4],
-            "edges": [x & 0xFFFFFF for x in w[5:10]]}
+            "edges": [x & 0xFFFFFF for x in w[5:10]], "tclk": w[10],
+            "iodelay": [w[11] >> (8 * i) & 0xFF for i in range(4)],
+            "er2_sr": w[12], "er2_shifts": w[13] & 0xFFFF, "er2_updates": w[13] >> 16}
 
 
 # перестановка линий данных под проводку стенда (2026-10-25 PE5/PE6 стояли наоборот — было "0132")
@@ -127,14 +134,30 @@ def cmd_freq(a):
     t = 2 ** h["win_log2"] / F_OSC
     print(f"окно 2^{h['win_log2']} ≈ {t:.3f} с, seq {h['seq']}")
     for name, e in zip(LINES, h["edges"]):
-        print(f"  {name:9} {e:9} фронтов  {e / 2 / t / 1e3:10.3f} кГц")
+        print(f"  {name:9} {e:9} фронтов  {e / 2 / t / 1e3:10.3f} кГц (по OSCB, честно до ~10 МГц)")
+    print(f"  TRACECLK  {h['tclk']:9} тактов   {h['tclk'] / t / 1e3:10.3f} кГц (счётчик в домене TRACECLK)")
+    print(f"  IODELAY по линиям: {h['iodelay']}")
     return h
 
 
-def capture(mode, dly, chunk=1024, wait=30.0):
-    """Пуск записи, ожидание заполнения, чтение буфера."""
-    w = parse(fpga(er2(command(mode, dly, arm=True)) + er2(command(mode, dly)) + er1("", H)), H)[""]
+def lane_delay(lane, steps):
+    """Команда 0xB: IODELAY линии TRACED<lane> (None — всех четырёх)."""
+    return 0xB << 28 | (lane is None) << 26 | (lane or 0) << 24 | steps & 0xFF
+
+
+def capture(mode, dly, chunk=1024, wait=30.0, iodelay=None):
+    """Пуск записи, ожидание заполнения, чтение буфера. Режим 2: dly — IODELAY всех
+    линий, либо iodelay — список из четырёх задержек по линиям."""
+    pre = []
+    if mode == 2:
+        iodelay = iodelay or [dly] * 4
+        for i, d in enumerate(iodelay):
+            pre += er2(lane_delay(i, d))
+        dly = 0
+    w = parse(fpga(pre + er2(command(mode, dly, arm=True)) + er2(command(mode, dly)) + er1("", H)), H)[""]
     h = header(w)
+    if mode == 2 and h["iodelay"] != iodelay:
+        print(f"! IODELAY в образе {h['iodelay']}, ждали {iodelay}")
     if h["cmd"] != command(mode, dly):
         print(f"! эхо команды {h['cmd']:08x}, ждали {command(mode, dly):08x} — TDI сдвинут?")
     depth = 1 << h["depth_log2"]
@@ -364,7 +387,7 @@ def report(h, words, width, phi=None, verbose=True, lanes="0123"):
     else:
         samples = nibbles_mode1(words)
         if verbose:
-            print(f"полубайтов {len(samples)}, пропущено фронтов {h['miss']}")
+            print(f"полубайтов {len(samples)}" + (f", пропущено фронтов {h['miss']}" if h["mode"] == 1 else ""))
     r["samples"] = len(samples)
     if lanes != "0123":  # бит i выборки = линия TRACED<lanes[i]> по проводке
         samples = [sum((x >> int(c) & 1) << i for i, c in enumerate(lanes)) for x in samples]
@@ -394,7 +417,7 @@ def report(h, words, width, phi=None, verbose=True, lanes="0123"):
 
 
 def cmd_cap(a):
-    h, words = capture(a.mode, a.dly)
+    h, words = capture(a.mode, a.dly, iodelay=a.iodelay)
     print(f"записано {len(words)} слов, режим {h['mode']}")
     if a.save:
         json.dump({"header": h, "words": words, "width": a.width, "note": a.note}, open(a.save, "w"))
@@ -426,6 +449,65 @@ def cmd_sweep(a):
         f = row["edges"][0] / 2 / (2 ** 24 / F_OSC) / 1e3
         print(f"{row['hdiv']:8} {f:14.1f} {r0.get('half_period', '-'):>11}  "
               f"{r0.get('values', 0):8}/{r0.get('gaps', '-'):<8}  {r1.get('values', 0):8}/{r1.get('gaps', '-')}/{r1.get('miss', '-')}")
+
+
+POINTS2 = ["hsi:0:512", "hsi:0:64", "hsi:0:8", "hsi:0:2", "hsi:0:1",
+           "pll:336:16", "pll:336:8", "pll:336:4", "pll:336:2",
+           "pll:100:1", "pll:136:1", "pll:200:1", "pll:264:1", "pll:300:1", "pll:336:1"]
+
+
+def cmd_sweep2(a):
+    """Режим 2 (IDDR от TRACECLK): частоты источника × задержки IODELAY.
+    Итоги — в runs/sweep2.json, таблица: значений/разрывов на каждую задержку."""
+    path = os.path.join(HERE, "runs", a.out)
+    out = []
+    for pt in a.points:
+        src, n, hdiv = pt.split(":")
+        n, hdiv = int(n) or 336, int(hdiv)
+        print(f"\n===== {pt} =====")
+        stm_set(src, n, hdiv, 4, 16, 64, a.n0, a.ospeed)
+        time.sleep(1.5)
+        h = cmd_freq(a)
+        row = {"point": pt, "ospeed": a.ospeed, "n0": a.n0, "tclk_hz": h["tclk"] / (2 ** h["win_log2"] / F_OSC), "dly": {}}
+        for d in a.dly:
+            hh, w = capture(2, d, wait=10)
+            r = report(hh, w, 4, verbose=False)
+            row["dly"][d] = {k: r.get(k) for k in ("values", "gaps", "tpiu", "samples")}
+            print(f"  IODELAY {d:3}: значений {r.get('values', 0)}, разрывов {r.get('gaps', '-')}")
+        out.append(row)
+        json.dump(out, open(path, "w"), indent=1)
+    print("\nTRACECLK, МГц  " + " ".join(f"{d:>9}" for d in a.dly) + "   (значений/разрывов по IODELAY)")
+    for row in out:
+        cells = []
+        for d in a.dly:
+            r = row["dly"][d]
+            cells.append(f"{r['values'] or 0}/{r['gaps'] if r['gaps'] is not None else '-'}")
+        print(f"{row['tclk_hz'] / 1e6:13.3f}  " + " ".join(f"{c:>9}" for c in cells) + f"   {row['point']}")
+
+
+def cmd_lanes(a):
+    """Окно каждой линии: остальные три — на base, линия L — по списку задержек.
+    Итоги — в runs/<out>: значений/разрывов на каждую пару (линия, задержка)."""
+    src, n, hdiv = a.point.split(":")
+    stm_set(src, int(n) or 336, int(hdiv), 4, 16, 64)
+    time.sleep(1.5)
+    h = cmd_freq(a)
+    res = {"point": a.point, "tclk_hz": h["tclk"] / (2 ** h["win_log2"] / F_OSC), "base": a.base, "lanes": {}}
+    for lane in a.lane:
+        res["lanes"][lane] = {}
+        for d in a.dly:
+            iod = [a.base] * 4
+            iod[lane] = d
+            hh, w = capture(2, 0, wait=10, iodelay=iod)
+            r = report(hh, w, 4, verbose=False)
+            res["lanes"][lane][d] = [r.get("values", 0), r.get("gaps")]
+            print(f"  TRACED{lane} IODELAY {d:3}: значений {r.get('values', 0)}, разрывов {r.get('gaps', '-')}")
+        json.dump(res, open(os.path.join(HERE, "runs", a.out), "w"), indent=1)
+    print(f"\n{a.point}, TRACECLK {res['tclk_hz'] / 1e6:.3f} МГц, остальные линии на {a.base}; "
+          "+ — чисто, . — сбой")
+    print("        " + "".join(f"{d:>4}" for d in a.dly))
+    for lane, row in res["lanes"].items():
+        print(f"TRACED{lane} " + "".join(f"{'+' if v[0] > 100 and v[1] == 0 else '.':>4}" for v in row.values()))
 
 
 def cmd_decode(a):
@@ -488,10 +570,13 @@ def main():
     p.add_argument("--width", type=int, default=4)
     p.add_argument("--burst", type=int, default=16)
     p.add_argument("--idle", type=int, default=64)
+    p.add_argument("--n0", type=lambda x: int(x, 0), help="начальное значение счётчика ITM")
+    p.add_argument("--ospeed", type=int, default=3, help="крутизна выводов трассы OSPEEDR 0..3")
     sub.add_parser("freq", help="частоты линий")
     p = sub.add_parser("cap", help="запись и разбор")
     p.add_argument("--mode", type=int, default=0)
-    p.add_argument("--dly", type=int, default=0)
+    p.add_argument("--dly", type=int, default=0, help="режим 1: такты OSCB; режим 2: IODELAY всех линий")
+    p.add_argument("--iodelay", type=int, nargs=4, help="режим 2: IODELAY по линиям TRACED0..3")
     p.add_argument("--width", type=int, default=4)
     p.add_argument("--phi", type=float, help="фаза выборки в режиме 0 (по умолчанию — напротив смен данных)")
     p.add_argument("--save")
@@ -503,6 +588,18 @@ def main():
     p.add_argument("--hdiv", type=int, nargs="+", default=[512, 256, 128, 64, 16, 8, 4, 2, 1])
     p.add_argument("--width", type=int, default=4)
     p.add_argument("--lanes", default=LANES)
+    p = sub.add_parser("sweep2", help="режим 2: частоты × задержки IODELAY")
+    p.add_argument("--points", nargs="+", default=POINTS2, help="источник:pll_n:делитель")
+    p.add_argument("--dly", type=int, nargs="+", default=[0, 64, 128, 192, 255])
+    p.add_argument("--out", default="sweep2.json")
+    p.add_argument("--ospeed", type=int, default=3, help="крутизна выводов трассы STM32")
+    p.add_argument("--n0", type=lambda x: int(x, 0), help="начальное значение счётчика (0x0f000000 — худший шаблон)")
+    p = sub.add_parser("lanes", help="режим 2: окно каждой линии по IODELAY")
+    p.add_argument("--point", default="pll:248:1", help="источник:pll_n:делитель")
+    p.add_argument("--base", type=int, default=48, help="задержка остальных линий")
+    p.add_argument("--lane", type=int, nargs="+", default=[0, 1, 2, 3])
+    p.add_argument("--dly", type=int, nargs="+", default=list(range(0, 256, 16)) + [255])
+    p.add_argument("--out", default="lanes.json")
     p = sub.add_parser("decode", help="разбор сохранённой записи")
     p.add_argument("file")
     p.add_argument("--width", type=int, default=4)
@@ -513,13 +610,17 @@ def main():
     p.add_argument("--width", type=int, default=4)
     a = ap.parse_args()
     if a.cmd == "stm":
-        stm_set(a.src, a.pll_n, a.hdiv, a.width, a.burst, a.idle)
+        stm_set(a.src, a.pll_n, a.hdiv, a.width, a.burst, a.idle, a.n0, a.ospeed)
     elif a.cmd == "freq":
         cmd_freq(a)
     elif a.cmd == "cap":
         cmd_cap(a)
     elif a.cmd == "sweep":
         cmd_sweep(a)
+    elif a.cmd == "sweep2":
+        cmd_sweep2(a)
+    elif a.cmd == "lanes":
+        cmd_lanes(a)
     elif a.cmd == "decode":
         cmd_decode(a)
     elif a.cmd == "encode":

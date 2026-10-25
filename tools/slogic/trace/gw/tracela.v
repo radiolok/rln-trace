@@ -1,29 +1,43 @@
-// Приёмник трассы TPIU на SLogic16U3, шаг 1: пятиканальный логический анализатор
-// с выдачей через JTAG (GW_JTAG, как tools/slogic/jprobe). Линии оцифровываются
-// внутренним генератором OSCB (~30 МГц), поэтому годится до TRACECLK ~2–3 МГц —
-// чтобы увидеть, что данные идут, и как они стоят относительно фронтов.
+// Приёмник трассы TPIU на SLogic16U3 с выдачей через JTAG (GW_JTAG, как
+// tools/slogic/jprobe).
+// Шаг 1 (режимы 0, 1): пятиканальный логический анализатор на внутреннем генераторе
+// OSCB (~30 МГц) — годится до TRACECLK ~4 МГц, показывает, как данные стоят
+// относительно фронтов.
+// Шаг 2 (режим 2): приём от самого TRACECLK — глобальный такт с N9, данные через
+// IODELAY (dly × ~12,5 пс) в IDDR, свой буфер с тактом TRACECLK.
 //
 // Линии: l[0] = TRACECLK (CH12, N9), l[4:1] = TRACED0..3 (CH8..CH11).
 //
 // Режимы (задаются командой ER2):
 //   0  смены уровней: слово {ts[26:0], l[4:0]} на каждую смену любой линии и
 //      принудительно раз в 2^26 тактов (чтобы склеить переполнение ts)
-//   1  выборка по фронту: через dly тактов после каждого фронта TRACECLK берётся
-//      TRACED[3:0]; 8 полубайт на слово, первый — в [3:0]
-// Запись идёт с команды «пуск» до заполнения буфера (2^DEPTH_LOG2 слов).
+//   1  выборка по фронту: через dly + 1 тактов после каждого фронта TRACECLK
+//      (после синхронизатора) берётся TRACED[3:0]; 8 полубайт на слово, первый — в [3:0]
+//   2  IDDR от TRACECLK, задержка данных — IODELAY своя у каждой линии (команда 0xB);
+//      полубайт по фронту, потом по спаду; 8 полубайт на слово, первый — в [3:0].
+//      Порт 4 бита.
+// Запись идёт с команды «пуск» до заполнения буфера (2^DEPTH_LOG2 слов). У режимов
+// 0/1 и 2 буферы раздельные (такты записи разные); чтение — из буфера режима команды.
 //
 // ER2 (0x43), DR 32 бита на вход: [31:28] 0xA — метка, [27] пуск, [26:25] режим,
 //   [24:16] dly, [15:0] адрес чтения (слово буфера).
+//   Или [31:28] 0xB — задержка IODELAY линии TRACED[25:24] (все четыре, если [26]) =
+//   [7:0] ступеней по ~12,5 пс; пуск записи не трогает.
 // ER1 (0x42), DR на выход, первым по TDO идёт бит 0 слова 0:
 //   0  "RLNA" (0x414E4C52)
 //   1  [7:0] версия, [15:8] DEPTH_LOG2, [23:16] WIN_LOG2, [31:24] seq окна частотомера
 //   2  последняя команда ER2 (эхо: проверка, что TDI дошёл без сдвига)
 //   3  [16:0] записано слов, [29:28] режим записи, [30] идёт запись, [31] буфер полон
+//      (для режима команды: 0/1 — буфер OSCB, 2 — буфер TRACECLK)
 //   4  фронтов, пропущенных режимом 1 (новый фронт раньше выборки)
 //   5..9  фронтов линии l[i] за окно 2^WIN_LOG2 тактов, [31:24] seq окна
-//   10..  буфер с адреса чтения
+//   10 тактов TRACECLK за окно (счётчик в домене TRACECLK, через код Грея)
+//   11 задержки IODELAY: [7:0] TRACED0 … [31:24] TRACED3
+//   12 сдвиговый регистр ER2 (отладка JTAG)
+//   13 [15:0] тактов сдвига ER2, [31:16] Update-DR при ER2 (отладка JTAG)
+//   14..  буфер с адреса чтения
 module top #(
-    parameter DEPTH_LOG2 = 14,
+    parameter DEPTH_LOG2 = 13,  // два буфера по 8 Кслов: 32 из 35 BSRAM
     parameter WIN_LOG2 = 24  // 2^24 тактов ≈ 0,56 с (OSCB ≈ 30 МГц)
 ) (
     input wire [15:0] ch,
@@ -31,8 +45,8 @@ module top #(
     input wire tck_pad_i, tms_pad_i, tdi_pad_i,
     output wire tdo_pad_o
 );
-    localparam H = 10, DEPTH = 1 << DEPTH_LOG2;
-    localparam [7:0] VER = 1, DL8 = DEPTH_LOG2, WL8 = WIN_LOG2;
+    localparam H = 14, DEPTH = 1 << DEPTH_LOG2;
+    localparam [7:0] VER = 3, DL8 = DEPTH_LOG2, WL8 = WIN_LOG2;
 
     wire clk;
     OSCB #(.FREQ_MODE("210"), .FREQ_DIV(4), .DYN_TRIM_EN("FALSE")) osc (
@@ -45,6 +59,7 @@ module top #(
 
     // ---- команда из JTAG-домена ----
     reg [31:0] cmd = 0;
+    reg [31:0] dls = 0;  // задержки IODELAY линий, по 8 бит
     reg arm_t = 0;
     reg [2:0] arm_s = 0;
     always @(posedge clk) arm_s <= {arm_s[1:0], arm_t};
@@ -68,7 +83,7 @@ module top #(
         we <= 0;
         if (arm) begin
             wptr <= 0;
-            run <= 1;
+            run <= cmd[26:25] != 2;
             full <= 0;
             mode <= cmd[26:25];
             dly <= cmd[24:16];
@@ -128,6 +143,68 @@ module top #(
                 cnt[24 * i +: 24] <= cnt[24 * i +: 24] + 1'b1;
     end
 
+    // ---- режим 2: приём от TRACECLK ----
+    wire tclk = ch[12];  // N9: GCLKT_2 — на глобальную сеть
+    wire [3:0] dd, q0, q1;
+    genvar g;
+    generate
+        for (g = 0; g < 4; g = g + 1) begin : ddr
+            IODELAY #(.C_STATIC_DLY(0), .DYN_DLY_EN("TRUE"), .ADAPT_EN("FALSE")) dl (
+                .DI(ch[8 + g]), .SDTAP(1'b0), .VALUE(1'b0), .DLYSTEP(dls[8 * g +: 8]),
+                .DO(dd[g]), .DF());
+            IDDR id (.D(dd[g]), .CLK(tclk), .Q0(q0[g]), .Q1(q1[g]));
+        end
+    endgenerate
+
+    reg [2:0] arm2_s = 0;
+    always @(posedge tclk) arm2_s <= {arm2_s[1:0], arm_t};
+    wire arm2 = arm2_s[2] ^ arm2_s[1];
+    reg [31:0] mem2 [0:DEPTH-1];
+    reg [DEPTH_LOG2:0] wptr2 = 0;
+    reg run2 = 0, full2 = 0;
+    reg [1:0] bcnt = 0;
+    reg [23:0] acc2 = 0;
+    always @(posedge tclk) begin
+        acc2 <= {q1, q0, acc2[23:8]};  // Q0 — выборка по фронту, Q1 — по следующему спаду
+        bcnt <= bcnt + 1'b1;
+        if (arm2) begin
+            wptr2 <= 0;
+            run2 <= cmd[26:25] == 2;
+            full2 <= 0;
+            bcnt <= 0;
+        end else if (run2 && bcnt == 3) begin
+            mem2[wptr2[DEPTH_LOG2-1:0]] <= {q1, q0, acc2};
+            wptr2 <= wptr2 + 1'b1;
+            if (wptr2 == DEPTH - 1) begin
+                run2 <= 0;
+                full2 <= 1;
+            end
+        end
+    end
+
+    // частотомер TRACECLK: OSCB его не оцифрует выше ~15 МГц — считаем такты в его
+    // же домене и переносим код Грея
+    reg [31:0] tc = 0, tg = 0;
+    always @(posedge tclk) begin
+        tc <= tc + 1'b1;
+        tg <= tc ^ (tc >> 1);
+    end
+    reg [31:0] tg1 = 0, tg2 = 0, tlast = 0, tfreq = 0;
+    reg [31:0] tbin;
+    integer k;
+    always @* begin
+        tbin[31] = tg2[31];
+        for (k = 30; k >= 0; k = k - 1)
+            tbin[k] = tbin[k + 1] ^ tg2[k];
+    end
+    always @(posedge clk) begin
+        {tg2, tg1} <= {tg1, tg};
+        if (&tmr) begin
+            tfreq <= tbin - tlast;
+            tlast <= tbin;
+        end
+    end
+
     // ---- пользовательский JTAG ----
     wire tck, tdi, sh_cap, upd, en1, en2;
     reg [19:0] idx = 0;
@@ -136,8 +213,10 @@ module top #(
     wire [4:0] bi = idx[4:0];
     wire [19:0] idx1 = idx + 1'b1;
     wire [15:0] ra = cmd[15:0] + idx1[19:5] - H;
-    reg [31:0] q = 0;
-    always @(posedge tck) q <= mem[ra[DEPTH_LOG2-1:0]];
+    reg [31:0] q = 0, q2 = 0;
+    always @(negedge tck) q <= mem[ra[DEPTH_LOG2-1:0]];
+    always @(negedge tck) q2 <= mem2[ra[DEPTH_LOG2-1:0]];
+    wire m2 = cmd[26:25] == 2;
 
     reg [31:0] hw;
     always @* begin
@@ -145,14 +224,19 @@ module top #(
             0: hw = 32'h414E4C52;
             1: hw = {seq, WL8, DL8, VER};
             2: hw = cmd;
-            3: hw = {full, run, mode, {(27 - DEPTH_LOG2){1'b0}}, wptr};
+            3: hw = m2 ? {full2, run2, 2'd2, {(27 - DEPTH_LOG2){1'b0}}, wptr2}
+                       : {full, run, mode, {(27 - DEPTH_LOG2){1'b0}}, wptr};
             4: hw = miss;
             5: hw = {seq, fcnt[0 +: 24]};
             6: hw = {seq, fcnt[24 +: 24]};
             7: hw = {seq, fcnt[48 +: 24]};
             8: hw = {seq, fcnt[72 +: 24]};
             9: hw = {seq, fcnt[96 +: 24]};
-            default: hw = q;
+            10: hw = tfreq;
+            11: hw = dls;
+            12: hw = sr;
+            13: hw = {ucnt, scnt};
+            default: hw = m2 ? q2 : q;
         endcase
     end
     wire tdo1 = hw[bi];
@@ -165,14 +249,36 @@ module top #(
         .enable_er1_o(en1), .enable_er2_o(en2),
         .tdo_er1_i(tdo1), .tdo_er2_i(sr[0]));
 
-    always @(posedge tck) begin
-        idx <= en1 & sh_cap ? idx + 1'b1 : 20'd0;
-        if (en2 & sh_cap)
+    // tck_o у GW_JTAG на GW5A инвертирован относительно TCK на выводе: его спад — это
+    // фронт TCK, на котором TAP переходит и берёт TDI (адаптер меняет TDI по спаду
+    // TCK). Проверено на железе перебором вариантов (журнал, шаг 2): вся логика —
+    // по спаду tck_o, состояние TAP защёлкивается по фронту tck_o (середина такта),
+    // поэтому на спаде k виден TAP между фронтами TCK k-1 и k, как и положено.
+    // Работа по фронту tck_o — гонка с TAP: v1 повезло с разводкой, v3 терял бит.
+    reg sh_q = 0, upd_q = 0, en1_q = 0, en2_q = 0;
+    always @(posedge tck) {sh_q, upd_q, en1_q, en2_q} <= {sh_cap, upd, en1, en2};
+
+    always @(negedge tck) begin
+        idx <= en1_q & sh_q ? idx + 1'b1 : 20'd0;
+        if (en2_q & sh_q)
             sr <= {tdi, sr[31:1]};
-        if (en2 & upd & sr[31:28] == 4'hA) begin
+        if (en2_q & upd_q & (sr[31:28] == 4'hA)) begin
             cmd <= sr;
             if (sr[27])
                 arm_t <= ~arm_t;
         end
+    end
+    // задержки линий
+    reg [15:0] ucnt = 0, scnt = 0;
+    always @(negedge tck) begin
+        if (en2_q & sh_q) scnt <= scnt + 1'b1;
+        if (en2_q & upd_q) ucnt <= ucnt + 1'b1;
+    end
+    wire setd = en2_q & upd_q & (sr[31:28] == 4'hB);
+    always @(negedge tck) begin
+        if (setd & (sr[26] | sr[25:24] == 2'd0)) dls[7:0] <= sr[7:0];
+        if (setd & (sr[26] | sr[25:24] == 2'd1)) dls[15:8] <= sr[7:0];
+        if (setd & (sr[26] | sr[25:24] == 2'd2)) dls[23:16] <= sr[7:0];
+        if (setd & (sr[26] | sr[25:24] == 2'd3)) dls[31:24] <= sr[7:0];
     end
 endmodule
