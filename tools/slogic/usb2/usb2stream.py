@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Поток EP1 IN образа usb2: скорость и непрерывность счётчика 32-битных слов (младший байт
+"""Поток EP1 IN образа usb2 / usb2d: скорость и непрерывность счётчика 32-битных слов (младший байт
 первым). Разрыв счётчика = потерянные или повторённые данные.
 
     python3 usb2stream.py --sec 5
     python3 usb2stream.py --sec 5 --out run.bin     # ещё и сохранить поток
-    python3 usb2stream.py --out-test 4096           # записать в EP1 OUT (проверка приёма)
+    python3 usb2stream.py --out-test 4096           # записать в OUT (проверка приёма): EP1 у usb2,
+                                                    # EP2 у usb2d — берётся из дескриптора
 """
 import argparse
 import struct
@@ -36,14 +37,16 @@ def main():
     ap.add_argument("--sec", type=float, default=3.0)
     ap.add_argument("--chunk", type=int, default=64 * 1024)
     ap.add_argument("--out")
-    ap.add_argument("--out-test", type=int, metavar="N", help="отправить N байт в EP1 OUT")
+    ap.add_argument("--out-test", type=int, metavar="N", help="отправить N байт в OUT")
     a = ap.parse_args()
     dev = open_dev()
     speed = {1: "LS", 2: "FS", 3: "HS", 4: "SS"}.get(dev.speed, dev.speed)
     print(f"{dev.manufacturer} / {dev.product} / {dev.serial_number}, скорость {speed}")
     if a.out_test:
-        n = dev.write(0x01, (bytes(range(256)) * (a.out_test // 256 + 1))[:a.out_test], timeout=2000)
-        print(f"EP1 OUT: записано {n} байт")
+        ep = usb.util.find_descriptor(dev.get_active_configuration()[(0, 0)], custom_match=lambda e:
+                                      usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT)
+        n = dev.write(ep.bEndpointAddress, (bytes(range(256)) * (a.out_test // 256 + 1))[:a.out_test], timeout=2000)
+        print(f"OUT {ep.bEndpointAddress:#04x}: записано {n} байт")
         return
     f = open(a.out, "wb") if a.out else None
     total = gaps = 0

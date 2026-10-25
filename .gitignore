@@ -34,3 +34,6 @@ doc/baikal/*.tar.gz
 # образы USB2 SLogic16U3: внутри нетлисты IP Gowin, собираются tools/slogic/usb2/build.sh
 tools/slogic/usb2/*.fs
 tools/slogic/uprobe/tb
+# симуляция ядра Daisho
+tools/slogic/usb2/sim/*.vcd
+tools/slogic/usb2/sim/*.vvp

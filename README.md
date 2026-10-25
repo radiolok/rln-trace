@@ -81,3 +81,4 @@ git submodule update --init --depth 1
 - Аппаратура: CERN-OHL-P v2 (будет добавлена вместе с первой разводкой).
 - Подмодули в `au/` сохраняют свои лицензии.
 - `tools/slogic/usb2/serdes/` — настройка SerDes из [ciniml/fpga_samples](https://github.com/ciniml/fpga_samples), Boost Software License 1.0.
+- `tools/slogic/usb2/daisho/` — USB2-ядро [Daisho](https://github.com/enjoy-digital/daisho) (Marshall H.), упрощённая BSD, с правками.

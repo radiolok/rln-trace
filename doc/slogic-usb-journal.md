@@ -18,7 +18,10 @@
   на этом же SLogic16U3 со своим PHY: какая пара dx, D14 = разрешение генератора, настройка SerDes, от которой
   взят такт (`tools/slogic/usb2/serdes/` — оттуда);
 - [sipeed/TangMega-138KPro-example](https://github.com/sipeed/TangMega-138KPro-example), `usb2_soft/usb_cy_streamer` —
-  Gowin SoftPHY на Arora V (GW5AST-138): fclk 960 МГц, TX Delay 1, RX Normal.
+  Gowin SoftPHY на Arora V (GW5AST-138): fclk 960 МГц, TX Delay 1, RX Normal;
+- [Daisho](https://github.com/enjoy-digital/daisho), `core/usb2` (Marshall H., BSD-2) — открытый USB2 device
+  поверх ULPI: пакетный и протокольный уровни взяты в `tools/slogic/usb2/daisho/`;
+- USB 2.0, 7.1.7.5 (сброс и согласование HS), UTMI 1.05 — чирп через OpMode 2 и LineState.
 
 ## Итог (2026-10-25)
 
@@ -28,6 +31,7 @@
 | Точный такт | генератор 125 МГц → REFCLK0 SerDes Q0 → линия 0 на 1,25 Гбит/с → tx_pcs_clkout 125 МГц → 2 PLL → 960/60 МГц; +42 ppm к SOF хоста |
 | USB2 FS | **работает**: перечисление, bulk IN 1,10 МБ/с без единого разрыва счётчика, bulk OUT |
 | USB2 HS | **работает**: 480M, bulk IN **25,45 МБ/с** (WSL через usbipd) 30 с без разрывов, `tx_failed` 0; bulk OUT; любые наполнения пакетов |
+| Свой стек USB2 | **работает**: ядро Daisho + свой слой UTMI (`usb2d.v`), чирп по KJ хоста, HS, bulk IN **23,8 МБ/с** 30 с без разрывов, bulk OUT 1 МиБ; без IP Gowin, кроме PHY |
 | Сборка | целиком из командной строки, без GUI Gowin: `tools/slogic/usb2/build.sh` |
 
 ## Инструменты
@@ -37,6 +41,7 @@
 | [`tools/slogic/uprobe`](../tools/slogic/uprobe/) | 22 свободных GPIO: вход / 0 / 1 по JTAG, кто идёт следом, запись смен уровней, частотомер G13 |
 | [`tools/slogic/sdprobe`](../tools/slogic/sdprobe/) | SerDes Q0: CSR из toml, детекторы REFCLK, CMU_OK, частоты тактов квада; `sdlib.v` — общий с usb2 |
 | [`tools/slogic/usb2`](../tools/slogic/usb2/) | образ USB2 HS: SoftPHY + Device Controller, такт от SerDes (`serdes/` — ciniml, BSL-1.0), ПЗУ дескрипторов (`mkdesc.py`), EP1 IN — счётчик или тестовое наполнение, EP1 OUT; журнал пакетов UTMI в BSRAM |
+| `tools/slogic/usb2` — `usb2d.v` | образ на своём стеке: [`daisho/`](../tools/slogic/usb2/daisho/) (BSD-2) + `usb2_utmi.v`; EP1 IN, EP2 OUT; журнал пакетов и событий шины; `usb2d.py`; симуляция `sim/run.sh` |
 
 ```sh
 export RLN_FPGA_USB=1-2                     # наша FT2232H (JTAG ПЛИС), см. журнал BE-U1000
@@ -47,6 +52,17 @@ python3 tools/slogic/usb2/usb2.py           # состояние, счётчик
 python3 tools/slogic/usb2/usb2.py log -n 200   # журнал пакетов (SOF не пишется)
 "/mnt/c/Program Files/usbipd-win/usbipd.exe" attach --wsl --hardware-id 1209:0001
 python3 tools/slogic/usb2/usb2stream.py --sec 5    # скорость и непрерывность EP1 IN
+```
+
+Свой стек (Daisho):
+
+```sh
+sh tools/slogic/usb2/build.sh d             # IP PHY/PLL из первой сборки → usb2d.fs
+sh tools/slogic/usb2/sim/run.sh             # симуляция ядра с моделью UTMI и хоста (и -DFS)
+$O/openFPGALoader -c ft2232 --busdev-num 1:$(cat /sys/bus/usb/devices/1-2/devnum) -m tools/slogic/usb2/usb2d.fs
+python3 tools/slogic/usb2/usb2d.py          # состояние шины, счётчики, ошибки CRC
+python3 tools/slogic/usb2/usb2d.py log -n 60   # журнал: сброс, чирп, KJ хоста, пакеты
+python3 tools/slogic/usb2/usb2d.py --off 1  # отключиться от шины (--off 0 — подключиться)
 ```
 
 Привязка `usbipd bind --hardware-id 1209:0001` (администратор) и правило udev для `1209:0001`
@@ -232,13 +248,73 @@ usbipd). Железо HS держит; ошибка — в моих настро
 не так: PHY там считает отсчёты IDES16 по 4 на бит и ждёт 960. Узнать это можно только из чужого проекта —
 пример Sipeed, где PLL прямо называется `fclk_960M`.
 
+## 2026-10-25. Свой стек: Daisho поверх UTMI
+
+Device Controller Gowin — закрытый нетлист с комбинационным ПЗУ дескрипторов и без EP0 для своих
+запросов. Замена — USB2-часть Daisho: пакетный уровень (`usb2_packet`), EP0 со стандартными запросами,
+двойные буферы bulk по 512 байт. Она написана под внешний PHY с ULPI. SoftPHY Gowin умеет и ULPI, но гонять
+ULPI внутри ПЛИС незачем: я заменил `usb2_ulpi.v` своим `usb2_utmi.v` с тем же интерфейсом к пакетному уровню.
+
+Передача. Пакетный уровень рассчитан на ULPI: первый байт — TX_CMD `{4'h4, PID}`, байты уходят по `nxt`,
+`stp` — в такте после последнего принятого байта. На UTMI это ложится почти один к одному: фронт `latch` →
+PID `{~P, P}` с `txvalid`; `nxt` = `txready`; `txvalid` снимается комбинационно по регистру `stp`,
+так что лишнего байта PHY не видит. Приём: `act` = `rxactive`, `latch` = `rxactive & rxvalid`.
+
+Шина. У Daisho согласование HS вслепую: чирп K 2 мс и сразу HS, KJ хоста не проверяется; сброс шины
+адрес не обнуляет. Свой автомат: SE0 ≥ 4 мкс в FS → сброс (пакетный и протокольный уровни в сбросе) →
+чирп K 2 мс (XcvrSelect HS, TermSelect FS, OpMode 2, данные 00h) → K-J-K-J-K-J хоста по LineState,
+каждый ≥ 2,5 мкс → HS. Нет чирпов 1,5 мс → FS. В HS 3 мс без активности → FS, через 100 мкс SE0 —
+сброс, J — приостановка, K — выход из неё в прежнюю скорость. Будет ли LineState SoftPHY показывать
+чирпы хоста при XcvrSelect = HS, по документации понять нельзя (PHY зашифрован). Поэтому в журнал
+пишутся события автомата: смены состояния и LineState вне FS/HS. Оказалось — показывает:
+
+```
+    9 +      4.05 мкс  ── CHIRP_K    linestate SE0 opmode 2 xcvr 0 term 1 чирпов 0
+   14 +   1999.87 мкс  ── CHIRP_WAIT linestate K   opmode 2 xcvr 0 term 1 чирпов 0
+   16 +     25.47 мкс  ── CHIRP_WAIT linestate K   opmode 2 xcvr 0 term 1 чирпов 0
+   17 +     48.85 мкс  ── CHIRP_WAIT linestate J   opmode 2 xcvr 0 term 1 чирпов 1
+   ...
+   21 +     48.88 мкс  ── CHIRP_WAIT linestate J   opmode 2 xcvr 0 term 1 чирпов 5
+   22 +      2.55 мкс  ── HS         linestate J   opmode 0 xcvr 0 term 0 чирпов 6
+   23 +  85282.63 мкс  ← хост SETUP  адрес 0        3 байт
+```
+
+Хост отвечает чирпом через 25 мкс, чирпы по 49 мкс. Перечисление под Windows прошло с первого раза,
+без единого повтора; ACK уходит через 0,17 мкс после конца пакета хоста, DATA — через 0,3–0,8 мкс.
+
+До железа — симуляция (`sim/tb_usb2d.v`, iverilog): модель UTMI и хоста с CRC5/CRC16, сброс, чирп, KJ,
+GET_DESCRIPTOR, SET_ADDRESS (старый адрес больше не отвечает), строка, GET_STATUS, CLEAR_FEATURE,
+SET_CONFIGURATION, 6 IN по EP1 (третий без ACK — повтор того же пакета), PING и OUT по EP2, сброс после
+3 мс тишины; HS и FS (байт раз в 40 тактов). Она нашла три ошибки Daisho, которых нет в FPGA с
+нулевой инициализацией регистров, и ложный чирп при подключении (SE0 до подъёма линии подтяжкой → OFF
+идёт через FSRST, ждать J). В Gowin ядро собралось после переноса объявлений до использования; логика
+25 %, BSRAM 55 %; нарушения тайминга — те же, что у сборки с контроллером Gowin (частотомеры, сброс PHY).
+
+| Проверка (WSL, usbipd) | Результат |
+|---|---|
+| `lsusb -t`, дескрипторы | 480M, 0x81 и 0x02 по 512, строки на месте |
+| EP1 IN, 30 с | 713,4 МБ, **23,78 МБ/с**, 0 разрывов счётчика; ошибок CRC (PID, токены, данные) 0 |
+| EP2 OUT | 1 МиБ, 2048 пакетов приняты |
+| наполнения 0x00 / 0xFF / 0x7E | всё по образцу, кроме первых 1024 байт — два буфера, заполненные до переключения |
+| пакеты по 16 байт | 0 разрывов (78 КБ/с: каждый короткий пакет — отдельная передача через usbipd) |
+| `usb2d.py --off 1` / `--off 0` | отключение, новый сброс, HS, поток с нуля |
+
+23,8 против 25,4 МБ/с у контроллера Gowin — в пределах разброса прогонов через usbipd (тот же образ
+давал 23,8–24,6). Предел по-прежнему, похоже, usbip.
+
+**Для статьи: ядро на чужой PHY.** Пакетный уровень Daisho знает про ULPI ровно три вещи: первый
+байт — команда с PID, байты идут по `nxt`, конец — `stp` следующим тактом. Заменить ULPI на UTMI —
+это 30 строк, а не новое ядро. Остальной слой ULPI — чирп и сброс — пришлось писать заново, и это оказалась
+та часть, где у оригинала были упрощения: HS вслепую, адрес, переживающий сброс шины.
+
 ## Открытые вопросы и что дальше
 
 1. Скорость HS без usbipd: замер под Windows (WinUSB) или на Linux-машине, чтобы отделить предел
    прибора от предела usbip.
 2. Поток трассы: FIFO на BSRAM между приёмником (tracela) и EP1 IN, флаг переполнения, отбрасывание простоя.
 3. Команды по EP0 (vendor) или EP1 OUT вместо JTAG.
-4. Переход на USB2-ядро Daisho (ULPI поверх SoftPHY) вместо Device Controller Gowin.
+4. ~~Переход на USB2-ядро Daisho~~ — сделан (`usb2d.v`). Дальше на нём: команды vendor-запросами
+   EP0 (есть `vend_req_*`, нужна стадия данных IN для чтения состояния) вместо JTAG.
 5. USB3 на том же кваде (линия 0 сейчас занята под такт 125 МГц — для USB3 такт брать с её PCS-тактов): PIPE от USB3_0_PHY Gowin + стек [Daisho](https://github.com/enjoy-digital/daisho) (Verilog, USB3 поверх
    PIPE TUSB1310A — 16 бит/250 МГц против 32 бит/125 МГц у Gowin, нужен переходник ширины; там же USB2 поверх ULPI —
    SoftPHY Gowin умеет ULPI, открытая замена Device Controller).
