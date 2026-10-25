@@ -37,6 +37,10 @@ adapter speed 2000
 transport select jtag
 jtag newtap gw5a tap -irlen 8 -expected-id 0x0001681b
 """
+# Две одинаковые FT2232H без серийников (наша и отладчик на EVU-BA-2.5): адаптер ПЛИС —
+# по месту на шине USB, например RLN_FPGA_USB=1-2 (см. /sys/bus/usb/devices).
+if os.environ.get("RLN_FPGA_USB"):
+    FPGA_CFG += f"adapter usb location {os.environ['RLN_FPGA_USB']}\n"
 
 # ---- источник: STM32F4-Discovery через ST-LINK ----
 # На HCLK в десятки кГц ST-LINK не держит связь с бегущим ядром, поэтому режим

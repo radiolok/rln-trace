@@ -25,3 +25,9 @@ tools/slogic/trace/stm32/trace.elf
 tools/slogic/trace/gw/stream.hex
 tools/slogic/trace/gw/tb_m*.hex
 tools/slogic/trace/gw/tb.fst
+tools/slogic/trace/beu1000/fw/trace.elf
+tools/slogic/trace/beu1000/fw/trace.lst
+tools/slogic/trace/beu1000/openocd.log
+# документация и SDK производителей: архив SDK (~190 МБ) распаковывается в ~/.local/opt
+doc/baikal/*.tar.gz
+*:Zone.Identifier

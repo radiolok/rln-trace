@@ -1,0 +1,104 @@
+{
+ "0": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "16": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "32": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "48": [
+  false,
+  false,
+  false,
+  true
+ ],
+ "64": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "80": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "96": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "112": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "128": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "144": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "160": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "176": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "192": [
+  false,
+  true,
+  false,
+  true
+ ],
+ "208": [
+  false,
+  true,
+  true,
+  true
+ ],
+ "224": [
+  false,
+  true,
+  true,
+  true
+ ],
+ "240": [
+  true,
+  true,
+  true,
+  true
+ ],
+ "255": [
+  true,
+  true,
+  true,
+  true
+ ]
+}

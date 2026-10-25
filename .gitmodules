@@ -30,3 +30,7 @@
 	path = au/nanoCH32H417
 	url = https://github.com/wuxx/nanoCH32H417
 	shallow = true
+[submodule "au/riscv-nexus-trace"]
+	path = au/riscv-nexus-trace
+	url = https://github.com/riscv-non-isa/riscv-nexus-trace
+	shallow = true

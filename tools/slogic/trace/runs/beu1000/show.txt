@@ -1,0 +1,407 @@
+полубайтов 65536, простоя 43607, сообщений 3185, вне сообщений 3
+  TCODE  3 DirectBranch           453
+  TCODE  4 IndirectBranch         2720
+  TCODE  9 ProgTraceSync          12
+  @     5 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @    15 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @    23 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @    29 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @    37 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @   137 0c 17                    DirectBranch ICNT=5                                        
+  @   143 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @   151 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @   161 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @   169 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @   175 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @   187 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @   277 0c 17                    DirectBranch ICNT=5                                        
+  @   283 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @   291 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @   301 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @   309 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @   315 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @   331 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @   425 0c 17                    DirectBranch ICNT=5                                        
+  @   431 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @   439 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @   449 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @   457 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @   463 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @   471 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @   571 0c 17                    DirectBranch ICNT=5                                        
+  @   577 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @   585 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @   595 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @   603 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @   609 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @   621 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @   711 0c 17                    DirectBranch ICNT=5                                        
+  @   717 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @   725 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @   735 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @   743 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @   749 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @   767 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @   861 0c 17                    DirectBranch ICNT=5                                        
+  @   867 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @   875 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @   885 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @   893 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @   899 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @   907 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  1007 0c 17                    DirectBranch ICNT=5                                        
+  @  1013 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1021 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  1031 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  1039 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1045 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  1053 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  1147 0c 17                    DirectBranch ICNT=5                                        
+  @  1153 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1161 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  1171 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  1179 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1185 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  1199 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  1295 0c 17                    DirectBranch ICNT=5                                        
+  @  1301 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1309 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  1319 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  1327 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1333 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  1341 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  1441 0c 17                    DirectBranch ICNT=5                                        
+  @  1447 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1455 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  1465 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  1473 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1479 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  1487 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  1581 0c 17                    DirectBranch ICNT=5                                        
+  @  1587 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1595 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  1605 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  1613 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1619 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  1633 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  1729 0c 17                    DirectBranch ICNT=5                                        
+  @  1735 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1743 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  1753 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  1761 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1767 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  1775 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  1875 0c 17                    DirectBranch ICNT=5                                        
+  @  1881 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  1889 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  1899 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  1907 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  1913 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  1921 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  2015 0c 17                    DirectBranch ICNT=5                                        
+  @  2021 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2029 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  2039 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  2047 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2053 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  2067 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  2163 0c 17                    DirectBranch ICNT=5                                        
+  @  2169 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2177 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  2187 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  2195 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2201 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  2209 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  2309 0c 17                    DirectBranch ICNT=5                                        
+  @  2315 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2323 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  2333 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  2341 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2347 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  2355 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  2449 0c 17                    DirectBranch ICNT=5                                        
+  @  2455 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2463 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  2473 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  2481 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2487 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  2501 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  2597 0c 17                    DirectBranch ICNT=5                                        
+  @  2603 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2611 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  2621 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  2629 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2635 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  2643 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  2743 0c 17                    DirectBranch ICNT=5                                        
+  @  2749 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2757 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  2767 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  2775 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2781 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  2789 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  2883 0c 17                    DirectBranch ICNT=5                                        
+  @  2889 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  2897 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  2907 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  2915 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  2921 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  2935 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  3031 0c 17                    DirectBranch ICNT=5                                        
+  @  3037 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3045 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  3055 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  3063 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3069 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  3077 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  3177 0c 17                    DirectBranch ICNT=5                                        
+  @  3183 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3191 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  3201 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  3209 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3215 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  3223 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  3317 0c 17                    DirectBranch ICNT=5                                        
+  @  3323 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3331 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  3341 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  3349 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3355 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  3369 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  3465 0c 17                    DirectBranch ICNT=5                                        
+  @  3471 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3479 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  3489 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  3497 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3503 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  3511 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  3611 0c 17                    DirectBranch ICNT=5                                        
+  @  3617 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3625 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  3635 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  3643 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3649 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  3657 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  3751 0c 17                    DirectBranch ICNT=5                                        
+  @  3757 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3765 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  3775 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  3783 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3789 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  
+  @  3803 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  3899 0c 17                    DirectBranch ICNT=5                                        
+  @  3905 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  3913 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  
+  @  3923 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  3931 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  3937 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  
+  @  3945 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   
+  @  4045 0c 17                    DirectBranch ICNT=5                                        
+  @  4051 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  4059 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  
+  @  4069 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  
+  @  4077 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  
+  @  4083 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  
+  @  4091 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   
+  @  4153 0c 17                    DirectBranch ICNT=5                                        
+  @  4159 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   
+  @  4167 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  
+  @  4177 24 89 a0 00 20 00 83     ProgTraceSync SYNC=2 (периодическая) ICNT=2 FADDR=0x40010050 → 0x40010050 <op_a>
+  @  4191 10 71 2c 07              IndirectBranch BTYPE=0 ICNT=7 UADDR=0x96                   → 0x400100c6 <main>
+  @  4263 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  4271 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  4281 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  4291 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  4295 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  4301 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  4309 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  4403 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  4411 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  4421 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  4431 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  4435 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  4441 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  4453 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  4551 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  4559 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  4569 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  4579 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  4583 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  4589 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  4597 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  4697 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  4705 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  4715 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  4725 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  4729 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  4735 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  4743 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  4837 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  4845 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  4855 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  4865 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  4869 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  4875 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  4887 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  4985 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  4993 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  5003 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  5013 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5017 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5023 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  5031 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  5131 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  5139 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  5149 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  5159 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5163 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5169 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  5177 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  5271 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  5279 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  5289 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  5299 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5303 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5309 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  5321 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  5419 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  5427 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  5437 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  5447 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5451 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5457 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  5465 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  5565 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  5573 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  5583 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  5593 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5597 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5603 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  5611 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  5705 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  5713 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  5723 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  5733 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5737 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5743 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  5755 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  5851 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  5859 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  5869 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  5879 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  5883 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  5889 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  5897 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  5997 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6005 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  6015 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  6025 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6029 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6035 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  6043 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  6137 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6145 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  6155 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  6165 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6169 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6175 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  6189 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  6285 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6293 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  6303 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  6313 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6317 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6323 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  6331 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  6431 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6439 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  6449 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  6459 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6463 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6469 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  6477 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  6571 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6579 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  6589 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  6599 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6603 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6609 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  6623 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  6719 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6727 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  6737 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  6747 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6751 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6757 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  6765 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  6865 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  6873 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  6883 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  6893 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  6897 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  6903 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  6911 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  7005 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7013 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  7023 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  7033 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7037 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7043 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  7057 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  7153 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7161 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  7171 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  7181 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7185 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7191 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  7199 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  7299 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7307 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  7317 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  7327 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7331 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7337 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  7345 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  7439 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7447 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  7457 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  7467 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7471 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7477 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  7491 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  7587 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7595 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  7605 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  7615 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7619 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7625 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  7633 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  7733 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7741 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  7751 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  7761 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7765 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7771 10 d1 b4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xda                  → 0x40010076 <op_c>
+  @  7779 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  7873 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  7881 10 e1 3c 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x9e                  → 0x4001004c <op_a>
+  @  7891 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  7901 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  7905 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  7911 10 d1 e4 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xf2                  → 0x4001005e <op_b>
+  @  7925 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  8021 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  8029 10 e1 48 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0xa4                  → 0x40010076 <op_c>
+  @  8039 10 81 60 07              IndirectBranch BTYPE=0 ICNT=8 UADDR=0xb0                   → 0x400100c6 <main>
+  @  8049 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  8053 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+  @  8059 10 d1 c0 07              IndirectBranch BTYPE=0 ICNT=13 UADDR=0xe0                  → 0x4001004c <op_a>
+  @  8067 10 91 14 07              IndirectBranch BTYPE=0 ICNT=9 UADDR=0x8a                   → 0x400100c6 <main>
+  @  8167 10 e1 2b                 IndirectBranch BTYPE=0 ICNT=14 UADDR=0x14                  → 0x400100d2 <main>
+  @  8175 10 e1 18 07              IndirectBranch BTYPE=0 ICNT=14 UADDR=0x8c                  → 0x4001005e <op_b>
+  @  8185 10 c1 30 07              IndirectBranch BTYPE=0 ICNT=12 UADDR=0x98                  → 0x400100c6 <main>
+  @  8195 0c 17                    DirectBranch ICNT=5                                        → 0x400100aa <main>
+  @  8199 10 91 d7                 IndirectBranch BTYPE=0 ICNT=9 UADDR=0x6a                   → 0x400100ac <main>
+инструкций восстановлено 21629, ошибок пути 0
+вызовов op_a/op_b/op_c 848, нарушений порядка a→b→c 0
+ИТОГ: трасса цела, путь программы совпал

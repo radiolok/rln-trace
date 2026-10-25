@@ -72,6 +72,7 @@ git submodule update --init --depth 1
 - [x] Направление A: вернуть SLogic16U3 после прозвонки (JTAG ПЛИС, [tools/slogic](tools/slogic/))
 - [x] Направление A: разводка входов SLogic16U3 — все 16 каналов, настройки входов ([журнал](doc/slogic-pinmap-journal.md), [gw/boards/slogic16u3](gw/boards/slogic16u3/))
 - [ ] Направление A: полоса входов на 84 МГц, USB3, приём трассы
+- [ ] Трасса RISC-V N-Trace с BE-U1000 через PIB ([журнал](doc/beu1000-trace-journal.md))
 
 ## Лицензии
 
