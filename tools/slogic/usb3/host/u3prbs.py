@@ -4,6 +4,8 @@
 Windows (WinUSB ставится сам по MS OS 2.0) или Linux. Порядок — как в host/usb3_prbs.py ciniml.
 
     py u3prbs.py -s 10 -q 4 -b 1048576 [-n]   # -n — без сверки
+    py u3prbs.py --loop 200                   # петля: EP1 OUT → EP1 IN, 200 посылок 8…3072 байт (DPP от хоста —
+                                              # приём, CRC-32 в разборщике), затем поток в обе стороны
     pip install libusb1                       # один раз
 """
 import argparse
@@ -32,6 +34,7 @@ def main():
     ap.add_argument("-q", "--queue", type=int, default=4, help="передач в полёте")
     ap.add_argument("-b", "--block", type=int, default=1 << 20, help="байт в передаче")
     ap.add_argument("-n", "--nocheck", action="store_true")
+    ap.add_argument("--loop", type=int, metavar="N", help="петля EP1 OUT → IN: N посылок, затем поток")
     a = ap.parse_args()
     tab = prbs15_table()
     tab2 = tab * (a.block // len(tab) + 3)
@@ -46,6 +49,9 @@ def main():
                 h.bulkRead(0x81, 1 << 16, timeout=50)
         except usb1.USBErrorTimeout:
             pass
+        if a.loop:
+            loop(h, ctx, a)
+            return
         h.controlWrite(0x40, 0x02, 0x0001, 0, b"")  # PRBS (последовательность заново)
         st = {"total": 0, "errs": 0, "phase": None, "run": True, "fail": None}
         order, done = [], {}
@@ -103,6 +109,67 @@ def main():
         print(f"очередь {a.queue} × {a.block} Б: {st['total'] / 1e6:.1f} МБ за {dt:.2f} с = "
               f"{st['total'] / dt / 1e6:.1f} МБ/с, ошибочных байт {st['errs']}"
               + ("" if a.nocheck else ", сверка вся") + (f", сбой передачи {st['fail']}" if st["fail"] else ""))
+
+
+def loop(h, ctx, a):
+    """Режим петли (0x02 = 0): байты EP1 OUT уходят в EP1 IN; короткий пакет закрывается по паузе потока."""
+    import random
+    rnd = random.Random(1)
+    bad = 0
+    for i in range(a.loop):
+        n = rnd.choice([8, 12, 511, 512, 513, 1023, 1024, 1025, 2048, 3072]) if i % 2 else rnd.randint(8, 3072)
+        d = bytes(rnd.getrandbits(8) for _ in range(n))
+        h.bulkWrite(0x01, d, timeout=2000)
+        got = b""
+        while len(got) < n:
+            got += h.bulkRead(0x81, 4096, timeout=2000)
+        if got != d:
+            bad += 1
+            if bad <= 5:
+                k = next((j for j in range(min(len(got), n)) if got[j] != d[j]), min(len(got), n))
+                print(f"  посылка {i}: {n} байт, вернулось {len(got)}, расхождение с байта {k}")
+    print(f"петля: {a.loop} посылок 8…3072 байт, не совпало {bad}")
+    # поток в обе стороны: запись и чтение одновременно (асинхронно), сверка всего, что вернулось
+    tot = 1 << 26 if a.seconds >= 10 else 1 << 24
+    src = bytes(rnd.getrandbits(8) for _ in range(1 << 20))
+    st = {"wr": 0, "rd": 0, "err": 0, "buf": b""}
+
+    def wcb(t):
+        if t.getStatus() == usb1.TRANSFER_COMPLETED and st["wr"] < tot:
+            st["wr"] += t.getActualLength()
+            if st["wr"] < tot:
+                t.submit()
+
+    def rcb(t):
+        if t.getStatus() != usb1.TRANSFER_COMPLETED:
+            return
+        d = bytes(t.getBuffer()[:t.getActualLength()])
+        off = st["rd"] % len(src)
+        ref = (src[off:] + src * 2)[:len(d)]
+        if d != ref:
+            st["err"] += 1
+        st["rd"] += len(d)
+        if st["rd"] < tot:
+            t.submit()
+
+    w = h.getTransfer(); w.setBulk(0x01, src, callback=wcb, timeout=5000)
+    r = [h.getTransfer() for _ in range(2)]
+    for t in r:
+        t.setBulk(0x81, 1 << 16, callback=rcb, timeout=5000)
+    t0 = time.perf_counter()
+    for t in r:
+        t.submit()
+    w.submit()
+    while st["rd"] < tot and time.perf_counter() - t0 < 60:
+        ctx.handleEventsTimeout(0.1)
+    dt = time.perf_counter() - t0
+    for t in r + [w]:
+        if t.isSubmitted():
+            t.cancel()
+    while any(t.isSubmitted() for t in r + [w]):
+        ctx.handleEventsTimeout(0.1)
+    print(f"поток в обе стороны: {st['rd'] / 1e6:.1f} МБ туда и обратно за {dt:.2f} с = {st['rd'] / dt / 1e6:.1f} МБ/с "
+          f"в каждую сторону, несовпавших передач {st['err']}")
 
 
 if __name__ == "__main__":

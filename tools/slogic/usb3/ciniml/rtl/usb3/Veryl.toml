@@ -32,4 +32,7 @@ compile_args = [
     "-Wno-INITIALDLY",
     "-Wno-TIMESCALEMOD",
     "-Wno-UNUSEDPARAM",
+    "-Wno-FUNCTIMECTL", # rln: Verilator 5.05x строже (task из function, неявный static, #0 в тестах)
+    "-Wno-IMPLICITSTATIC",
+    "-Wno-ZERODLY",
 ]

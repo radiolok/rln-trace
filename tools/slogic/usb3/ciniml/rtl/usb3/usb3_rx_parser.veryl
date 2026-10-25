@@ -167,6 +167,16 @@ module Usb3RxParser (
     var remain  : logic<11>    ; // DPP data bytes still to come
     var crc32   : logic<32>    ;
     var crc_rx  : logic<32>    ;
+    // rln: CRC-32 in two stages. The DPP states only register the word and its byte count (cq_*);
+    // crc32 takes them one clock later. DppTail2 registers the received CRC and the END / K flags
+    // (dq_*); the compare and o_dpp_end / o_dpp_err follow one clock later, when crc32 already holds
+    // the tail. Before, pos -> window mux -> CRC-32 of 4 bytes -> crc32 was one clock (~14 LUT levels).
+    var cq_valid: logic        ;
+    var cq_len  : logic<3>     ; // bytes in cq_data (1..4)
+    var cq_data : logic<32>    ;
+    var dq_valid: logic        ;
+    var dq_ok   : logic        ; // no K symbol in the CRC, DPPEND at its place
+    var dq_crc  : logic<32>    ;
     var ts_cnt  : logic<2>  [3]; // filler votes: [0] D10.2, [1] D5.2, [2] D21.5 (per word, 0..4 -> saturate)
     var ts_ok   : logic<3>     ; // all fillers so far matched: {D21.5, D5.2, D10.2}
     var idle_cnt: logic<4>     ;
@@ -244,16 +254,13 @@ module Usb3RxParser (
     var crc32_w: logic<32>;
     assign crc16_w = crc16_w4(crc16, w_desc);
     always_comb {
-        if remain >= 4 {
-            crc32_w = crc32_w4(crc32, w_desc);
-        } else {
-            crc32_w = case remain[1:0] {
-                1      : crc32_w1(crc32, w_desc[7:0]),
-                2      : crc32_w2(crc32, w_desc[15:0]),
-                3      : crc32_w3(crc32, w_desc[23:0]),
-                default: crc32,
-            };
-        }
+        // rln: from the registered word (cq_*), not from the window
+        crc32_w = case cq_len {
+            1      : crc32_w1(crc32, cq_data[7:0]),
+            2      : crc32_w2(crc32, cq_data[15:0]),
+            3      : crc32_w3(crc32, cq_data[23:0]),
+            default: crc32_w4(crc32, cq_data),
+        };
     }
 
     always_comb {
@@ -355,6 +362,12 @@ module Usb3RxParser (
             remain         = 0;
             crc32          = 0;
             crc_rx         = 0;
+            cq_valid       = 0;
+            cq_len         = 0;
+            cq_data        = 0;
+            dq_valid       = 0;
+            dq_ok          = 0;
+            dq_crc         = 0;
             ts_ok          = 0;
             idle_cnt       = 0;
             o_ts_valid     = 0;
@@ -384,6 +397,19 @@ module Usb3RxParser (
             o_dpp_valid    = 0;
             o_dpp_end      = 0;
             o_dpp_err      = 0;
+            // rln: second CRC stage (any clock, not only i_adv): word into crc32, then the DPP verdict
+            if cq_valid {
+                crc32    = crc32_w;
+                cq_valid = 0;
+            }
+            if dq_valid && !cq_valid {
+                dq_valid = 0;
+                if dq_ok && dq_crc == ~crc32 {
+                    o_dpp_end = 1;
+                } else {
+                    o_dpp_err = 1;
+                }
+            }
             // a clock without a PHY word (RxValid 0) does not exist for the parser: the window
             // holds (Usb3RxFifo), so nothing is consumed and no state moves; only the pulses drop
             if i_adv {
@@ -398,6 +424,8 @@ module Usb3RxParser (
 
                 if !i_enable {
                     pos      = 0;
+                    cq_valid = 0; // rln
+                    dq_valid = 0;
                     widx     = 0;
                     idle_cnt = 0;
                     o_idle8  = 0;
@@ -479,7 +507,9 @@ module Usb3RxParser (
                                     o_dpp_valid = 1;
                                     o_dpp_data  = w_desc;
                                     o_dpp_be    = 4'b1111;
-                                    crc32       = crc32_w;
+                                    cq_valid    = 1; // rln: crc32 next clock
+                                    cq_len      = 4;
+                                    cq_data     = w_desc;
                                     remain      = remain - 4;
                                 }
                             }
@@ -497,7 +527,9 @@ module Usb3RxParser (
                                     2      : 4'b0011,
                                     default: 4'b0111,
                                 };
-                                crc32 = crc32_w;
+                                cq_valid = remain[1:0] != 0; // rln: crc32 next clock
+                                cq_len   = {1'b0, remain[1:0]};
+                                cq_data  = w_desc;
                                 case remain[1:0] {
                                     0      : crc_rx[31:0] = w_desc;
                                     1      : crc_rx[23:0] = w_desc[31:8];
@@ -529,11 +561,10 @@ module Usb3RxParser (
                                         kk             = v_k[0] | v_k[1] | v_k[2];
                                     }
                                 }
-                                if !kk && hit_at(r, H_END) && crc_full == ~crc32 {
-                                    o_dpp_end = 1;
-                                } else {
-                                    o_dpp_err = 1;
-                                }
+                                // rln: verdict one clock later (above), against the finished crc32
+                                dq_valid = 1;
+                                dq_ok    = !kk && hit_at(r, H_END);
+                                dq_crc   = crc_full;
                             }
                         }
                         State::TsBody: {

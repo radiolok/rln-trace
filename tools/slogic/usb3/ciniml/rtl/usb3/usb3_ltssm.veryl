@@ -144,6 +144,7 @@ module Usb3Ltssm #(
     var warm_reset  : logic    ; // LFPS present for >= tResetDelay
     var burst_cnt   : logic<2> ; // consecutive Polling.LFPS bursts received (saturating at 2)
     var tx_after_rx : logic<4> ; // bursts sent since the last received burst (saturating at POLL_LFPS_AFTER_RX)
+    var tar_full    : logic    ; // rln: tx_after_rx == POLL_LFPS_AFTER_RX, set with the increment (keeps the compare off the next-state path)
 
     always_ff {
         if_reset {
@@ -201,6 +202,7 @@ module Usb3Ltssm #(
     var pb_us  : logic<4>; // Polling burst phase timer
     var pb_on  : logic   ;
     var pb_sent: logic<5>; // bursts sent (saturating at POLL_LFPS_SENT)
+    var pb_full: logic   ; // rln: pb_sent == POLL_LFPS_SENT, set with the increment (keeps the compare off the next-state path)
     var pb_edge: logic   ; // one clock at the end of a transmitted burst
 
     // ---------------------------------------------------------------- TS transmit
@@ -358,8 +360,10 @@ module Usb3Ltssm #(
             pb_us           = 0;
             pb_on           = 0;
             pb_sent         = 0;
+            pb_full         = 0;
             pb_edge         = 0;
             tx_after_rx     = 0;
+            tar_full        = 0;
             ts_word         = 0;
             ts_cfg_tx       = 0;
             ts_sent         = 0;
@@ -453,6 +457,13 @@ module Usb3Ltssm #(
                 idle_rx = 1;
             }
 
+            // rln: TSEQ / SKP counters cleared in the first clock of Polling.RxEq (st_chg is a register),
+            // not from ns at the entry: the 17-bit reset fanout hung off the whole next-state logic.
+            // Nothing counts in that clock (ts_word restarts at 0, a TSEQ ends at ts_word 7).
+            if st_chg && state == State::PollingRxEq {
+                tseq_cnt = 0;
+                skp_cnt  = 0;
+            }
             // ---- training set transmit sequencing (one word per clock)
             if o_tx_sel_ts {
                 if skp_now {
@@ -492,6 +503,11 @@ module Usb3Ltssm #(
                 skp_now = 0;
             }
             // idle words sent after idle received
+            // rln: cleared in the first clock of a state (st_chg is a register) instead of from ns; every
+            // use is gated by idle_rx, which the entry action still clears, so the old count is never seen
+            if st_chg {
+                idle_sent = 0;
+            }
             if o_tx_idle && idle_rx && idle_sent != 31 {
                 idle_sent = idle_sent + 1;
             }
@@ -507,9 +523,11 @@ module Usb3Ltssm #(
                         pb_edge = 1;
                         if pb_sent != POLL_LFPS_SENT as 5 {
                             pb_sent = pb_sent + 1;
+                            pb_full = pb_sent == (POLL_LFPS_SENT - 1) as 5;
                         }
                         if tx_after_rx != POLL_LFPS_AFTER_RX as 4 {
                             tx_after_rx = tx_after_rx + 1;
+                            tar_full    = tx_after_rx == (POLL_LFPS_AFTER_RX - 1) as 4;
                         }
                     } else if pb_us == 9 {
                         pb_us = 15; // next tick wraps to 0
@@ -520,6 +538,7 @@ module Usb3Ltssm #(
                 // the consecutive sequence, not from every burst
                 if lfps_burst && burst_cnt == 0 {
                     tx_after_rx = 0;
+                    tar_full    = 0;
                 }
             } else if state == State::U3Wake {
                 lfps_tx = 1;
@@ -527,6 +546,14 @@ module Usb3Ltssm #(
                 lfps_tx = 0;
                 pb_on   = 0;
                 pb_us   = 15;
+            }
+            // rln: outside Polling.LFPS the burst counters sit at 0 (like pb_us at 15), so they are 0 on
+            // entry without an entry action: that reset hung off the whole next-state logic
+            if state != State::PollingLfps {
+                pb_sent     = 0;
+                pb_full     = 0;
+                tx_after_rx = 0;
+                tar_full    = 0;
             }
 
             // ---- transitions
@@ -593,8 +620,7 @@ module Usb3Ltssm #(
                     State::PollingLfps: {
                         pd = if POLL_LFPS_P2 ? 2'b10 : 2'b00;
                         if !pd_wait {
-                            if pb_sent == POLL_LFPS_SENT as 5 && burst_cnt == 2 && tx_after_rx
-                                == POLL_LFPS_AFTER_RX as 4 && !pb_on {
+                            if pb_full && burst_cnt == 2 && tar_full && !pb_on {
                                 ns = State::PollingRxEq;
                             } else if tmo[6] {
                                 ns = State::Disabled;
@@ -712,8 +738,7 @@ module Usb3Ltssm #(
                 ts_word   = 0;
                 ts2_rst0  = 0;
                 ts1_seen  = 0;
-                idle_rx   = 0;
-                idle_sent = 0;
+                idle_rx   = 0; // rln: idle_sent — on st_chg
                 skp_now   = 0;
                 // drop buffered symbols only where a new training phase starts;
                 // entering U0 / Idle must keep the partner's symbols already received
@@ -721,16 +746,12 @@ module Usb3Ltssm #(
                     || !rx_en_c;
                 case ns {
                     State::PollingLfps: {
-                        pb_sent       = 0;
-                        tx_after_rx   = 0;
-                        pb_us         = 15;
+                        // rln: pb_sent, tx_after_rx (and flags) are 0 and pb_us is 15 outside Polling.LFPS
                         o_scr_bypass  = 0;
                         o_rx_polarity = 0;
                     }
                     State::PollingRxEq: {
-                        tseq_cnt  = 0;
-                        tseq_done = 0;
-                        skp_cnt   = 0;
+                        tseq_done = 0; // rln: tseq_cnt, skp_cnt — on st_chg (above)
                     }
                     State::PollingActive, State::RecoveryActive: {
                         ts_cfg_tx = 0;
