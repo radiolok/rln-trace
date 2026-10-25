@@ -182,4 +182,6 @@ usbipd). Железо HS держит; ошибка — в моих настро
    - IPUG781 советует все линии USB в одном банке, у Sipeed — банки 1, 3, 4 (но DFU работает).
 2. Поток трассы: FIFO на BSRAM между приёмником (tracela) и EP1 IN, флаг переполнения, отбрасывание простоя.
 3. Команды по EP0 (vendor) или EP1 OUT вместо JTAG.
-4. USB3 на том же кваде: PIPE от USB3_0_PHY Gowin, канальный и протокольный уровни — свои (Daisho / LUNA как образец).
+4. USB3 на том же кваде: PIPE от USB3_0_PHY Gowin + стек [Daisho](https://github.com/enjoy-digital/daisho) (Verilog, USB3 поверх
+   PIPE TUSB1310A — 16 бит/250 МГц против 32 бит/125 МГц у Gowin, нужен переходник ширины; там же USB2 поверх ULPI —
+   SoftPHY Gowin умеет ULPI, открытая замена Device Controller).
