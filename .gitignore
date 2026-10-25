@@ -17,3 +17,6 @@ target/
 # дампы флеш приборов (образы производителя)
 *-factory.bin
 tools/slogic/pinmap/stm32/pattern.elf
+# SLogic16U3 flash dumps and images cut from them (encrypted Sipeed firmware)
+after-*.bin
+restore-*.bin
