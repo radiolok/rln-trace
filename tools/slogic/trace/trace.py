@@ -1,0 +1,530 @@
+#!/usr/bin/env python3
+"""Трасса STM32F4 → SLogic16U3, шаг 1: проверка, что данные TPIU доходят.
+
+Источник — tools/slogic/trace/stm32 (ITM-счётчик через TPIU), приёмник —
+образ gw/tracela.v в SRAM ПЛИС, читается через JTAG (FT2232H, OpenOCD).
+
+    python3 trace.py stm --src hsi --hdiv 512 --width 4   # режим источника (ядро под сбросом)
+    python3 trace.py freq                                  # частоты линий по частотомеру образа
+    python3 trace.py cap --mode 0 --save run.json          # смены уровней: фаза данных, разбор
+    python3 trace.py cap --mode 1 --dly 20                 # выборка по фронту TRACECLK
+    python3 trace.py decode run.json                       # разбор сохранённой записи
+    python3 trace.py encode --out stream.hex               # синтетический поток для tb.v
+"""
+
+import argparse
+import bisect
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OPENOCD = os.path.expanduser("~/.local/opt/oss-cad-suite/bin/openocd")
+F_OSC = 2 ** 26 / 2.24  # OSCB "210"/4 на GW5AT-15 — ~30 МГц (измерено при прозвонке, journal Э3)
+H = 10  # слов заголовка ER1
+MAGIC = 0x414E4C52  # "RLNA"
+
+FPGA_CFG = """adapter driver ftdi
+ftdi vid_pid 0x0403 0x6010
+ftdi channel 0
+ftdi layout_init 0x0008 0x000b
+adapter speed 2000
+transport select jtag
+jtag newtap gw5a tap -irlen 8 -expected-id 0x0001681b
+"""
+
+# ---- источник: STM32F4-Discovery через ST-LINK ----
+# На HCLK в десятки кГц ST-LINK не держит связь с бегущим ядром, поэтому режим
+# пишется под сбросом (ядро на HSI 16 МГц), прошивка читает его при старте.
+CFG_ADDR = 0x20000000
+CFG_MAGIC = 0x544E4C52
+SRC = {"hsi": 0, "hse": 1, "pll": 2}
+
+
+def openocd(args, cmd, timeout=60):
+    r = subprocess.run([OPENOCD] + args + ["-c", cmd], capture_output=True, text=True, timeout=timeout)
+    return r.stdout + r.stderr
+
+
+def stm_set(src, pll_n, hdiv, width, burst, idle):
+    words = [CFG_MAGIC, 0, SRC[src], pll_n, hdiv, width, burst, idle]
+    cmd = ("init; reset halt; "
+           f"write_memory {CFG_ADDR:#x} 32 {{{' '.join(hex(w) for w in words)}}}; "
+           f"puts \"CFG [read_memory {CFG_ADDR:#x} 32 13]\"; resume; shutdown")
+    out = openocd(["-f", "board/stm32f4discovery.cfg",
+                   "-c", "reset_config srst_only srst_nogate connect_assert_srst"], cmd)
+    m = re.search(r"^CFG (.*)$", out, re.M)
+    if not m:
+        sys.exit("ST-LINK: нет ответа\n" + out[-1500:])
+    v = [int(x, 16) for x in m[1].split()]
+    print(f"прошлый прогон: hclk {v[9]} Гц, err {v[10]}, отправлено {v[11]}, переприменений трассы {v[12]}")
+    base = {"hsi": 16e6, "hse": 8e6, "pll": pll_n * 0.5e6}[src]
+    print(f"задано: {src} / {hdiv}, HCLK {base / hdiv / 1e3:g} кГц, TRACECLK ≈ {base / hdiv / 2e3:g} кГц, "
+          f"порт {width} бит")
+
+
+# ---- приёмник: JTAG ПЛИС ----
+
+def fpga(cmds):
+    out = openocd(["-c", FPGA_CFG.replace("\n", "; ")], "init; " + "; ".join(cmds) + "; shutdown", timeout=120)
+    return out
+
+
+def er2(word):
+    return [f"irscan gw5a.tap 0x43", f"drscan gw5a.tap 32 {word:#x}"]
+
+
+def er1(tag, nwords):
+    # +1 слово: на железе первым идёт лишний бит (см. jprobe), кадр ищется по метке
+    return ["irscan gw5a.tap 0x42", f"puts \"DR{tag} [drscan gw5a.tap {32 * (nwords + 1)} 0]\""]
+
+
+def align(v, nwords):
+    for off in range(8):
+        w = [(v >> (off + 32 * j)) & 0xFFFFFFFF for j in range(nwords)]
+        if w[0] == MAGIC:
+            return w
+    return None
+
+
+def parse(out, nwords):
+    res = {}
+    for m in re.finditer(r"^DR(\w*) (\S+)$", out, re.M):
+        w = align(int(m[2], 16), nwords)
+        if w is None:
+            sys.exit(f"нет \"RLNA\" в ER1 ({m[1]}): образ не загружен?\n" + out[-800:])
+        res[m[1]] = w
+    if not res:
+        sys.exit("OpenOCD не вернул данные:\n" + out[-1500:])
+    return res
+
+
+def command(mode=0, dly=0, addr=0, arm=False):
+    return 0xA << 28 | int(arm) << 27 | (mode & 3) << 25 | (dly & 0x1FF) << 16 | (addr & 0xFFFF)
+
+
+def header(w):
+    st = w[3]
+    return {"ver": w[1] & 0xFF, "depth_log2": w[1] >> 8 & 0xFF, "win_log2": w[1] >> 16 & 0xFF,
+            "seq": w[1] >> 24, "cmd": w[2], "wptr": st & 0x1FFFF, "mode": st >> 28 & 3,
+            "run": st >> 30 & 1, "full": st >> 31, "miss": w[4],
+            "edges": [x & 0xFFFFFF for x in w[5:10]]}
+
+
+# перестановка линий данных под проводку стенда (2026-10-25 PE5/PE6 стояли наоборот — было "0132")
+LANES = "0123"
+
+LINES = ["TRACECLK", "TRACED0", "TRACED1", "TRACED2", "TRACED3"]
+
+
+def cmd_freq(a):
+    w = parse(fpga(er1("", H)), H)[""]
+    h = header(w)
+    t = 2 ** h["win_log2"] / F_OSC
+    print(f"окно 2^{h['win_log2']} ≈ {t:.3f} с, seq {h['seq']}")
+    for name, e in zip(LINES, h["edges"]):
+        print(f"  {name:9} {e:9} фронтов  {e / 2 / t / 1e3:10.3f} кГц")
+    return h
+
+
+def capture(mode, dly, chunk=1024, wait=30.0):
+    """Пуск записи, ожидание заполнения, чтение буфера."""
+    w = parse(fpga(er2(command(mode, dly, arm=True)) + er2(command(mode, dly)) + er1("", H)), H)[""]
+    h = header(w)
+    if h["cmd"] != command(mode, dly):
+        print(f"! эхо команды {h['cmd']:08x}, ждали {command(mode, dly):08x} — TDI сдвинут?")
+    depth = 1 << h["depth_log2"]
+    t0 = time.time()
+    while not h["full"]:
+        if time.time() - t0 > wait:
+            print(f"! буфер не заполнился за {wait:.0f} с: {h['wptr']} слов — пишу что есть")
+            break
+        time.sleep(0.5)
+        h = header(parse(fpga(er1("", H)), H)[""])
+    n = depth if h["full"] else h["wptr"]
+    if n == 0:
+        return h, []
+    cmds = []
+    for a in range(0, n, chunk):
+        cmds += er2(command(mode, dly, addr=a)) + er1(f"{a}", H + chunk)
+    res = parse(fpga(cmds), H + chunk)
+    words = []
+    for a in range(0, n, chunk):
+        words += res[str(a)][H:H + min(chunk, n - a)]
+    return h, words
+
+
+# ---- разбор записи ----
+
+def events(words):
+    """Режим 0: [(время в тактах, линии)] с разворотом 27-битной метки времени."""
+    ev, hi, last = [], 0, None
+    for x in words:
+        ts = x >> 5
+        if last is not None and ts < last:
+            hi += 1 << 27
+        last = ts
+        ev.append((hi + ts, x & 0x1F))
+    return ev
+
+
+def phase_analysis(ev):
+    """Фазы смен данных внутри полупериода TRACECLK (0 — на фронте такта)."""
+    clk = [(t, v & 1) for t, v in ev]
+    edges = [t for (t, c), (_, c0) in zip(clk[1:], clk) if c != c0]
+    data_ch = [t for (t, v), (_, v0) in zip(ev[1:], ev) if (v ^ v0) & 0x1E]
+    ph = []
+    for t in data_ch:
+        k = bisect.bisect_right(edges, t) - 1
+        if 0 <= k < len(edges) - 1:
+            ph.append((t - edges[k]) / (edges[k + 1] - edges[k]))
+    return edges, ph
+
+
+def sample_nibbles(ev, edges, phi):
+    times = [t for t, _ in ev]
+    out = []
+    for e0, e1 in zip(edges, edges[1:]):
+        t = e0 + phi * (e1 - e0)
+        k = bisect.bisect_right(times, t) - 1
+        out.append(ev[k][1] >> 1 if k >= 0 else 0)
+    return out
+
+
+def nibbles_mode1(words):
+    return [(x >> (4 * i)) & 0xF for x in words for i in range(8)]
+
+
+SYNC = b"\xff\xff\xff\x7f"
+
+
+def to_bytes(samples, width, off):
+    bits = [(s >> b) & 1 for s in samples for b in range(width)]
+    bits = bits[off:]
+    return bytes(sum(bits[8 * i + b] << b for b in range(8)) for i in range(len(bits) // 8))
+
+
+def frames(hw, st):
+    """Кадры форматтера (16 байт) из потока полуслов, ID → bytes."""
+    data, cur = {}, None
+    b = b"".join(x.to_bytes(2, "little") for x in hw)
+    for p in range(0, len(b) - 15, 16):
+        f, aux = b[p:p + 16], b[p + 15]
+        st["frames"] += 1
+        for i in range(8):
+            x, ab = f[2 * i], aux >> i & 1
+            nxt = f[2 * i + 1] if i < 7 else None
+            if x & 1:
+                if ab and nxt is not None:
+                    data.setdefault(cur, bytearray()).append(nxt)
+                cur = x >> 1
+                if not ab and nxt is not None:
+                    data.setdefault(cur, bytearray()).append(nxt)
+            else:
+                data.setdefault(cur, bytearray()).append(x & 0xFE | ab)
+                if nxt is not None:
+                    data.setdefault(cur, bytearray()).append(nxt)
+    return data
+
+
+def tpiu(samples, width):
+    """Разбор потока TPIU. Синхронизация: полуслово 0x7FFF (байты FF 7F) — в непрерывном
+    режиме TPIU вставляет его в простое в любом месте, даже внутри кадра; полная 0x7FFFFFFF
+    задаёт начало кадра. Сдвиг бит ищется по числу полуслов 0x7FFF; если полной
+    синхронизации нет, начало кадра (одно из 8 положений) — по непрерывности счётчика ITM.
+    Возвращает (сдвиг, {id: bytes}, статистика)."""
+    best = None
+    for off in range(16):
+        b = to_bytes(samples, width, off % 8 + 8 * (off // 8))
+        hw = [int.from_bytes(b[i:i + 2], "little") for i in range(0, len(b) - 1, 2)]
+        n = hw.count(0x7FFF)
+        if best is None or n > best[0]:
+            best = (n, off, hw)
+    n, off, hw = best
+    if n == 0:
+        return None, {}, {"half": 0}
+    st = {"half": 0, "full": 0, "frames": 0, "phase": None}
+    clean, starts = [], []
+    for i, x in enumerate(hw):
+        if x == 0x7FFF:
+            if clean and clean[-1] == 0xFFFF:  # 0xFFFF 0x7FFF — полная синхронизация
+                clean.pop()
+                st["full"] += 1
+                starts.append(len(clean))
+            else:
+                st["half"] += 1
+            continue
+        clean.append(x)
+    if starts:
+        ph = starts[0] % 8
+        cand = [ph]
+    else:
+        cand = range(8)
+    res = None
+    for ph in cand:
+        s = dict(st, frames=0, phase=ph)
+        data = frames(clean[ph:], s)
+        vals, _ = itm(bytes(data.get(1, b"")))
+        score = len(vals) - 10 * len(check(vals))
+        if res is None or score > res[0]:
+            res = (score, data, s)
+    return off, res[1], res[2]
+
+
+def itm(b):
+    """Пакеты ITM: значения стимул-порта 0 (32 бита) и счётчики служебных."""
+    vals, st, i = [], {"sync": 0, "overflow": 0, "other": 0, "bad": 0}, 0
+    while i < len(b):
+        h = b[i]
+        if h == 0:
+            j = i
+            while j < len(b) and b[j] == 0:
+                j += 1
+            if j < len(b) and b[j] == 0x80 and j - i >= 5:
+                st["sync"] += 1
+                i = j + 1
+            else:
+                i = j
+            continue
+        if h == 0x70:
+            st["overflow"] += 1
+            i += 1
+            continue
+        if h & 3:  # программный (SWIT) или аппаратный источник
+            n = {1: 1, 2: 2, 3: 4}[h & 3]
+            if i + 1 + n > len(b):
+                break
+            v = int.from_bytes(b[i + 1:i + 1 + n], "little")
+            if not h & 4 and h >> 3 == 0 and n == 4:
+                vals.append(v)
+            else:
+                st["other"] += 1
+            i += 1 + n
+            continue
+        # метка времени или расширение: продолжение по биту 7
+        st["other"] += 1
+        i += 1
+        if h & 0x80:
+            while i < len(b) and b[i] & 0x80:
+                i += 1
+            i += 1
+    return vals, st
+
+
+def check(vals):
+    gaps = [(a, b) for a, b in zip(vals, vals[1:]) if (b - a) & 0xFFFFFFFF != 1]
+    return gaps
+
+
+def mode1_dly(r):
+    """Режим 1 берёт выборку через dly + 1 тактов после того, как фронт прошёл синхронизатор."""
+    return max(0, min(511, round(r["phi"] * r["half_period"]) - 1))
+
+
+def report(h, words, width, phi=None, verbose=True, lanes="0123"):
+    """Разбор записи; возвращает словарь итогов (для sweep и журнала)."""
+    r = {"words": len(words), "mode": h["mode"], "miss": h["miss"]}
+    if h["mode"] == 0:
+        ev = events(words)
+        edges, ph = phase_analysis(ev)
+        r["edges"] = len(edges)
+        if len(edges) < 4:
+            print("фронтов TRACECLK в записи нет")
+            return r
+        hp = [b - a for a, b in zip(edges, edges[1:])]
+        hps = sorted(hp)
+        r["half_period"] = hps[len(hps) // 2]
+        r["half_min"], r["half_max"] = hps[0], hps[-1]
+        if verbose:
+            print(f"событий {len(ev)}, фронтов TRACECLK {len(edges)}, полупериод (тактов OSCB): "
+                  f"мин {hps[0]}, медиана {r['half_period']}, макс {hps[-1]} "
+                  f"→ TRACECLK ≈ {F_OSC / 2 / r['half_period'] / 1e3:.2f} кГц")
+        hist = [0] * 10
+        for x in ph:
+            hist[min(int(x * 10), 9)] += 1
+        r["phase_hist"] = hist
+        if verbose:
+            print("смены данных по фазе полупериода (0 = фронт такта):")
+            for k, c in enumerate(hist):
+                print(f"  {k / 10:.1f}–{(k + 1) / 10:.1f} {c:7} " + "#" * min(60, c * 60 // max(1, max(hist))))
+        if phi is None:
+            # круговое среднее фазы смен; выборка — напротив
+            sx = sum(math.cos(2 * math.pi * x) for x in ph)
+            sy = sum(math.sin(2 * math.pi * x) for x in ph)
+            m = (math.atan2(sy, sx) / (2 * math.pi)) % 1 if ph else 0.0
+            phi = (m + 0.5) % 1
+        r["phi"] = phi
+        if verbose:
+            print(f"выборка на фазе {phi:.2f}; для режима 1: dly ≈ {mode1_dly(r)} тактов")
+        samples = sample_nibbles(ev, edges, phi)
+    else:
+        samples = nibbles_mode1(words)
+        if verbose:
+            print(f"полубайтов {len(samples)}, пропущено фронтов {h['miss']}")
+    r["samples"] = len(samples)
+    if lanes != "0123":  # бит i выборки = линия TRACED<lanes[i]> по проводке
+        samples = [sum((x >> int(c) & 1) << i for i, c in enumerate(lanes)) for x in samples]
+    off, data, st = tpiu(samples, width)
+    r["tpiu"] = st
+    if off is None:
+        print("синхронизация TPIU (FF 7F) не найдена")
+        if verbose:
+            print("первые выборки:", "".join(f"{s:x}" for s in samples[:128]))
+        return r
+    r["ids"] = {str(k): len(v) for k, v in data.items()}
+    vals, ist = itm(bytes(data.get(1, b"")))
+    gaps = check(vals)
+    r.update(values=len(vals), gaps=len(gaps), itm=ist,
+             first=vals[0] if vals else None, last=vals[-1] if vals else None)
+    if verbose:
+        print(f"TPIU: сдвиг {off} бит, синхронизаций: полных {st['full']}, полуслов {st['half']}; "
+              f"начало кадра {st['phase']}, кадров {st['frames']}, "
+              f"байтов по ID: {r['ids']}")
+        print(f"ITM: значений {len(vals)}, {('с ' + str(vals[0]) + ' по ' + str(vals[-1])) if vals else ''}; "
+              f"разрывов {len(gaps)}; служебные {ist}")
+        for a, b in gaps[:10]:
+            print(f"  разрыв {a:#x} → {b:#x}")
+    ok = vals and not gaps
+    print("ИТОГ: " + ("данные идут, счётчик непрерывен" if ok else "ОШИБКИ"))
+    return r
+
+
+def cmd_cap(a):
+    h, words = capture(a.mode, a.dly)
+    print(f"записано {len(words)} слов, режим {h['mode']}")
+    if a.save:
+        json.dump({"header": h, "words": words, "width": a.width, "note": a.note}, open(a.save, "w"))
+    return report(h, words, a.width, a.phi, lanes=a.lanes)
+
+
+def cmd_sweep(a):
+    """Перебор скоростей: для каждого делителя AHB — частотомер, режим 0 (фаза, полупериод),
+    режим 1 с задержкой от режима 0. Итоги — в runs/sweep-<src>.json."""
+    out = []
+    for hdiv in a.hdiv:
+        print(f"\n===== {a.src} / {hdiv} =====")
+        stm_set(a.src, a.pll_n, hdiv, a.width, 16, 64)
+        time.sleep(1.2)
+        h = cmd_freq(a)
+        row = {"src": a.src, "hdiv": hdiv, "edges": h["edges"]}
+        h0, w0 = capture(0, 0, wait=10)
+        r0 = report(h0, w0, a.width, verbose=False, lanes=a.lanes)
+        row["m0"] = r0
+        if "half_period" in r0:
+            dly = mode1_dly(r0)
+            h1, w1 = capture(1, dly, wait=10)
+            row["m1"] = dict(report(h1, w1, a.width, verbose=False, lanes=a.lanes), dly=dly)
+        out.append(row)
+        json.dump(out, open(os.path.join(HERE, "runs", f"sweep-{a.src}.json"), "w"), indent=1)
+    print("\nделитель  TRACECLK, кГц  полупериод  режим 0: знач/разрывов   режим 1: знач/разрывов/пропуск фронтов")
+    for row in out:
+        r0, r1 = row["m0"], row.get("m1", {})
+        f = row["edges"][0] / 2 / (2 ** 24 / F_OSC) / 1e3
+        print(f"{row['hdiv']:8} {f:14.1f} {r0.get('half_period', '-'):>11}  "
+              f"{r0.get('values', 0):8}/{r0.get('gaps', '-'):<8}  {r1.get('values', 0):8}/{r1.get('gaps', '-')}/{r1.get('miss', '-')}")
+
+
+def cmd_decode(a):
+    if a.file.endswith(".hex"):  # кадр ER1 из симуляции (tb.v): заголовок + буфер
+        w = [int(x.replace("x", "0"), 16) for x in open(a.file).read().split()]
+        h = header(w[:H])
+        n = 1 << h["depth_log2"] if h["full"] else h["wptr"]
+        print(f"запись: {n} слов, режим {h['mode']}, полон {h['full']}")
+        report(h, w[H:H + n], a.width, a.phi, lanes=a.lanes)
+        return
+    d = json.load(open(a.file))
+    report(d["header"], d["words"], d.get("width", a.width), a.phi, lanes=a.lanes)
+
+
+# ---- синтетический поток для симуляции ----
+
+def encode(nvals=160, burst=16, idle_syncs=3, width=4):
+    def frames(data):
+        out = bytearray()
+        for k in range(0, len(data), 14):
+            d = list(data[k:k + 14]) + [0] * (14 - len(data[k:k + 14]))  # хвост — нули (ITM их пропустит)
+            f = [3] + [0] * 15  # байт 0: смена ID на 1, сразу
+            aux = 0
+            for j, x in enumerate(d):
+                pos = j + 1
+                if pos % 2:
+                    f[pos] = x
+                else:
+                    f[pos] = x & 0xFE
+                    aux |= (x & 1) << (pos // 2)
+            f[15] = aux
+            out += bytes(f)
+        return out
+
+    stream = bytearray(SYNC * 2)
+    n = 0x12345670
+    while n < 0x12345670 + nvals:
+        itmb = bytearray()
+        for _ in range(burst):
+            itmb += bytes([0x03]) + n.to_bytes(4, "little")
+            n += 1
+        stream += frames(itmb) + SYNC * idle_syncs
+    bits = [(x >> b) & 1 for x in stream for b in range(8)]
+    return [sum(bits[i + b] << b for b in range(width)) for i in range(0, len(bits), width)]
+
+
+def cmd_encode(a):
+    s = encode(width=a.width)
+    open(a.out, "w").write("\n".join(f"{x:x}" for x in s) + "\n")
+    print(f"{len(s)} выборок по {a.width} бит → {a.out}")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("stm", help="режим источника")
+    p.add_argument("--src", choices=SRC, default="hsi")
+    p.add_argument("--pll-n", type=int, default=336, help="PLL: SYSCLK = n/2 МГц")
+    p.add_argument("--hdiv", type=int, default=512)
+    p.add_argument("--width", type=int, default=4)
+    p.add_argument("--burst", type=int, default=16)
+    p.add_argument("--idle", type=int, default=64)
+    sub.add_parser("freq", help="частоты линий")
+    p = sub.add_parser("cap", help="запись и разбор")
+    p.add_argument("--mode", type=int, default=0)
+    p.add_argument("--dly", type=int, default=0)
+    p.add_argument("--width", type=int, default=4)
+    p.add_argument("--phi", type=float, help="фаза выборки в режиме 0 (по умолчанию — напротив смен данных)")
+    p.add_argument("--save")
+    p.add_argument("--note", default="")
+    p.add_argument("--lanes", default=LANES, help="перестановка линий данных: бит i = TRACED<lanes[i]>")
+    p = sub.add_parser("sweep", help="перебор скоростей")
+    p.add_argument("--src", choices=SRC, default="hsi")
+    p.add_argument("--pll-n", type=int, default=336)
+    p.add_argument("--hdiv", type=int, nargs="+", default=[512, 256, 128, 64, 16, 8, 4, 2, 1])
+    p.add_argument("--width", type=int, default=4)
+    p.add_argument("--lanes", default=LANES)
+    p = sub.add_parser("decode", help="разбор сохранённой записи")
+    p.add_argument("file")
+    p.add_argument("--width", type=int, default=4)
+    p.add_argument("--lanes", default=LANES)
+    p.add_argument("--phi", type=float)
+    p = sub.add_parser("encode", help="синтетический поток TPIU для tb.v")
+    p.add_argument("--out", default="stream.hex")
+    p.add_argument("--width", type=int, default=4)
+    a = ap.parse_args()
+    if a.cmd == "stm":
+        stm_set(a.src, a.pll_n, a.hdiv, a.width, a.burst, a.idle)
+    elif a.cmd == "freq":
+        cmd_freq(a)
+    elif a.cmd == "cap":
+        cmd_cap(a)
+    elif a.cmd == "sweep":
+        cmd_sweep(a)
+    elif a.cmd == "decode":
+        cmd_decode(a)
+    elif a.cmd == "encode":
+        cmd_encode(a)
+
+
+if __name__ == "__main__":
+    main()
