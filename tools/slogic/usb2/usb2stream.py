@@ -6,12 +6,17 @@
     python3 usb2stream.py --sec 5 --out run.bin     # ещё и сохранить поток
     python3 usb2stream.py --out-test 4096           # записать в OUT (проверка приёма): EP1 у usb2,
                                                     # EP2 у usb2d — берётся из дескриптора
+
+На Windows без usbipd (usb2d сам просит WinUSB через MS OS 2.0; libusb — pip install libusb-package):
+
+    py usb2stream.py --sec 30
 """
 import argparse
-import struct
+import array
 import sys
 import time
 
+import numpy as np
 import usb.core
 import usb.util
 
@@ -19,7 +24,11 @@ VID, PID = 0x1209, 0x0001
 
 
 def open_dev():
-    dev = usb.core.find(idVendor=VID, idProduct=PID)
+    backend = None
+    if sys.platform == "win32":
+        import libusb_package
+        backend = libusb_package.get_libusb1_backend()
+    dev = usb.core.find(idVendor=VID, idProduct=PID, backend=backend)
     if dev is None:
         sys.exit(f"нет устройства {VID:04x}:{PID:04x}")
     try:
@@ -52,25 +61,33 @@ def main():
     total = gaps = 0
     expect = None
     tail = b""
+    rbuf = array.array("B", bytes(a.chunk))  # чтение в готовый буфер — без выделения памяти на каждый вызов
     t0 = time.monotonic()
     while time.monotonic() - t0 < a.sec:
         try:
-            buf = bytes(dev.read(0x81, a.chunk, timeout=1000))
+            n = dev.read(0x81, rbuf, timeout=1000)
         except usb.core.USBTimeoutError:
             print("тайм-аут чтения")
             continue
+        buf = memoryview(rbuf)[:n]
         if f:
             f.write(buf)
-        total += len(buf)
-        data = tail + buf
-        n = len(data) // 4
-        tail = data[4 * n:]
-        for (w,) in struct.iter_unpack("<I", data[:4 * n]):
-            if expect is not None and w != expect:
-                if gaps < 10:
-                    print(f"  разрыв: ждали {expect:#010x}, пришло {w:#010x} ({(w - expect) & 0xFFFFFFFF:+d} слов)")
-                gaps += 1
-            expect = (w + 1) & 0xFFFFFFFF
+        total += n
+        data = tail + bytes(buf) if tail else buf
+        nw = len(data) // 4
+        tail = bytes(data[4 * nw:])
+        if not nw:
+            continue
+        # проверка счётчика на numpy: в цикле Python 7 млн слов/с съедают весь процессор
+        w = np.frombuffer(data, "<u4", nw)
+        prev = np.empty_like(w)
+        prev[0] = w[0] if expect is None else expect
+        prev[1:] = w[:-1] + np.uint32(1)
+        bad = np.flatnonzero(w != prev)
+        for i in bad[:max(0, 10 - gaps)]:
+            print(f"  разрыв: ждали {prev[i]:#010x}, пришло {w[i]:#010x} ({(int(w[i]) - int(prev[i])) & 0xFFFFFFFF:+d} слов)")
+        gaps += len(bad)
+        expect = int(w[-1] + np.uint32(1))
     dt = time.monotonic() - t0
     print(f"{total} байт за {dt:.2f} с — {total / dt / 1e6:.3f} МБ/с, разрывов {gaps}, последнее слово {expect - 1 if expect else None}")
 

@@ -11,7 +11,8 @@ other_speed_configuration.
 
 Для Daisho (usb2d.v): ПЗУ на 256 байт с задержкой чтения в такт, смещения — параметрами
 usb_descrip.vh; длина ответа — первый байт дескриптора (у конфигурации — DESCR_USB2_CONFIG_LEN).
-Конфигурация одна — HS (bulk по 512): EP1 IN и EP2 OUT, как в usb2_protocol.v.
+Конфигурация одна — HS (bulk по 512): EP1 IN и EP2 OUT, как в usb2_protocol.v. bcdUSB 2.10, BOS с
+платформой MS OS 2.0 → Windows ставит WinUSB сама (без Zadig).
 """
 import os
 import sys
@@ -48,17 +49,41 @@ parts += [(n, string(s)) for n, s in zip(("STRVENDOR", "STRPRODUCT", "STRSERIAL"
 
 
 
+MS_VENDOR_CODE = 0x20  # vendor IN 0x20, wIndex 7 → набор MS OS 2.0 (своих запросов 0x20 нет)
+
+
+def msos20():
+    """Набор MS OS 2.0: заголовок + CompatibleID WINUSB — Windows сама ставит WinUSB (не композитное
+    устройство, без подмножеств). DeviceInterfaceGUID не нужен: libusb открывает по пути устройства."""
+    compat = le16(20) + le16(3) + list(b"WINUSB\0\0") + [0] * 8
+    return le16(10) + le16(0) + [0x00, 0x00, 0x03, 0x06] + le16(10 + len(compat)) + compat
+
+
+def bos(ms_len):
+    """BOS: расширение USB 2.0 (без LPM) и платформа MS OS 2.0 (Windows 8.1+)."""
+    usb20ext = [7, 0x10, 0x02, 0, 0, 0, 0]
+    uuid = [0xDF, 0x60, 0xDD, 0xD8, 0x89, 0x45, 0xC7, 0x4C, 0x9C, 0xD2, 0x65, 0x9D, 0x9E, 0x64, 0x8A, 0x9F]
+    plat = [28, 0x10, 0x05, 0] + uuid + [0x00, 0x00, 0x03, 0x06] + le16(ms_len) + [MS_VENDOR_CODE, 0]
+    body = usb20ext + plat
+    return [5, 0x0F] + le16(5 + len(body)) + [2] + body
+
+
 def daisho():
-    d = [("DEVICE", dev), ("DEVICE_QUAL", qual), ("CONFIG", config(512, 0x02)),
+    # bcdUSB 2.10 — иначе Windows не спросит BOS; bcdDevice 0x0101 — сброс кэша usbflags у Windows
+    dev21 = [18, 1] + le16(0x0210) + [0, 0, 0, 64] + le16(VID) + le16(PID) + le16(0x0101) + [1, 2, 3, 1]
+    ms = msos20()
+    d = [("DEVICE", dev21), ("DEVICE_QUAL", qual), ("CONFIG", config(512, 0x02)),
+         ("BOS", bos(len(ms))), ("MSOS20", ms),
          ("STRING0", [4, 3, 0x09, 0x04])]
     d += [(f"STRING{i + 1}", string(s)) for i, s in enumerate(STRINGS)]
     d += [("CONFUNSET", [0]), ("CONFSET", [1]), ("ZERO2", [0, 0])]
     rom, vh = [], [f"// Сгенерировано mkdesc.py daisho — не править руками. VID:PID {VID:04x}:{PID:04x}"]
     for name, b in d:
         vh.append(f"parameter [7:0] DESCR_USB2_{name} = 8'd{len(rom)};")
-        if name == "CONFIG":
-            vh.append(f"parameter [7:0] DESCR_USB2_CONFIG_LEN = 8'd{len(b)};")
+        if name in ("CONFIG", "BOS", "MSOS20"):  # первый байт — не полная длина
+            vh.append(f"parameter [7:0] DESCR_USB2_{name}_LEN = 8'd{len(b)};")
         rom += b
+    vh.append(f"parameter [7:0] MS_VENDOR_CODE = 8'h{MS_VENDOR_CODE:02x};")
     assert len(rom) <= 256 and max(len(b) for _, b in d) < 64  # desired_out_len в usb2_ep0 — 6 бит
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "daisho")
     open(os.path.join(here, "usb_descrip.vh"), "w").write("\n".join(vh) + "\n")

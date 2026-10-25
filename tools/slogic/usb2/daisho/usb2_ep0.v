@@ -240,7 +240,13 @@ always @(posedge phy_clk) begin
 		//	state <= 10;
 		//end else begin
 		
-		if(packet_setup_type == SETUP_TYPE_VENDOR) begin
+		// rln: MS OS 2.0 — набор дескрипторов из ПЗУ, а не наружу (vend_rd_*)
+		if(packet_setup_type == SETUP_TYPE_VENDOR && packet_setup_dir == SETUP_DIR_DEVTOHOST &&
+				packet_setup_req == MS_VENDOR_CODE && packet_setup_widx == 16'd7) begin
+			descrip_addr_offset <= DESCR_USB2_MSOS20;
+			desired_out_len <= DESCR_USB2_MSOS20_LEN;
+			state_in <= ST_RDLEN_2;
+		end else if(packet_setup_type == SETUP_TYPE_VENDOR) begin
 			// parse vendor request
 			state_in <= ST_REQ_VENDOR;
 		end else begin
@@ -315,6 +321,12 @@ always @(posedge phy_clk) begin
 		16'h0600: begin
 			// device qualifier descriptor
 			descrip_addr_offset <= DESCR_USB2_DEVICE_QUAL;
+		end
+		16'h0F00: begin
+			// rln: BOS (bcdUSB 2.10) — длина полная, не первый байт
+			descrip_addr_offset <= DESCR_USB2_BOS;
+			desired_out_len <= DESCR_USB2_BOS_LEN;
+			state_in <= ST_RDLEN_2;
 		end
 		default: begin
 			packet_out_len <= 0;
