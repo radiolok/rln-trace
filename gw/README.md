@@ -7,7 +7,7 @@ Gowin EDA: `logic`, `always_ff`/`always_comb`, параметры, без interf
 |---|---|
 | [`cores/`](cores/) | Платформонезависимые ядра: приём TPIU, метки времени, пакетизатор, SWD/JTAG, CSR, мосты к USB-чипу (HSPI для CH569, UHSIF для CH32H417) за общим интерфейсом потоков |
 | [`platform/`](platform/) | Платформенный слой Gowin; пока только поведенческие модели примитивов (rPLL, ODDR, IOBUF) для Verilator |
-| [`boards/`](boards/) | Верхние модули плат: [Tang Nano 20K, шаг 0](boards/tangnano20k/) — самотест в CH569 по HSPI 16 бит и замер CRC; [Tang Nano 9K](boards/tangnano9k/) — источник трассы, PPS и меандра для стенда; дальше зонд B, SLogic16U3 |
+| [`boards/`](boards/) | Верхние модули плат: [Tang Nano 20K, шаг 0](boards/tangnano20k/) — самотест в CH569 по HSPI 16 бит и замер CRC; [Tang Nano 9K](boards/tangnano9k/) — источник трассы, PPS и меандра для стенда; [SLogic16U3](boards/slogic16u3/) — скелет: выводы и настройки входов; дальше зонд B |
 | [`test/`](test/) | Тестбенчи Verilator на C++, модели внешних микросхем |
 
 ```sh

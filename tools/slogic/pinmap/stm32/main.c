@@ -1,6 +1,7 @@
 // Источник для прозвонки SLogic16U3 на STM32F4-Discovery: счётчик n на выводах,
 // бит k (канал SLogic CHk) переключается f/2^k раз в секунду, f = 16 МГц / 32 = 500 кГц.
 //   CH0..CH7 — PD0..PD7, CH8..CH15 — PE0..PE7; биты 8 и 9 дублируются на PE8, PE9.
+//   Биты 16 и 17 (~7,6 и ~3,8 Гц) — на PE10, PE11: для выводов CK0, CK1.
 // Такт — HSI после сброса (16 МГц, ±1 %), шаг цикла отмеряет SysTick (DWT
 // отладчик при подключении сбрасывает, SysTick — нет).
 // Зелёный PD12 мигает ~1 Гц — прошивка идёт. На PE0/PE1 платы — выходы INT1/INT2
@@ -61,8 +62,8 @@ void reset(void)
         else
             red = 1u << 14;
     }
-    REG(GPIOE + MODER) = (REG(GPIOE + MODER) & 0xFFF00000u) | 0x50000u | emode;  // + PE8, PE9
-    REG(GPIOE + OSPEEDR) |= 0x55555u;
+    REG(GPIOE + MODER) = (REG(GPIOE + MODER) & 0xFF000000u) | 0x550000u | emode;  // + PE8..PE11
+    REG(GPIOE + OSPEEDR) |= 0x555555u;
     REG(GPIOD + MODER) = (REG(GPIOD + MODER) & 0xCCFF0000u) | 0x11005555u;  // PD0..7, PD12, PD14
     REG(GPIOD + OSPEEDR) |= 0x5555u;
 
@@ -75,7 +76,7 @@ void reset(void)
             ;
         n++;
         REG(GPIOD + ODR) = (n & 0xFFu) | ((n >> 18) & 1u) << 12 | red;
-        REG(GPIOE + ODR) = ((n >> 8) & 0xFFu) | (n & 0x300u);
+        REG(GPIOE + ODR) = ((n >> 8) & 0xFFu) | (n & 0x300u) | ((n >> 16) & 3u) << 10;
     }
 }
 
