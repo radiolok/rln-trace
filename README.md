@@ -72,7 +72,7 @@ git submodule update --init --depth 1
 - [x] Направление A: вернуть SLogic16U3 после прозвонки (JTAG ПЛИС, [tools/slogic](tools/slogic/))
 - [x] Направление A: разводка входов SLogic16U3 — все 16 каналов, настройки входов ([журнал](doc/slogic-pinmap-journal.md), [gw/boards/slogic16u3](gw/boards/slogic16u3/))
 - [ ] Направление A: полоса входов на 84 МГц, USB3, приём трассы
-- [ ] Направление A: USB2 своим образом — FS работает, HS ещё нет ([журнал](doc/slogic-usb-journal.md))
+- [x] Направление A: USB2 своим образом — HS, bulk IN 25 МБ/с без потерь ([журнал](doc/slogic-usb-journal.md))
 - [ ] Трасса RISC-V N-Trace с BE-U1000 через PIB ([журнал](doc/beu1000-trace-journal.md))
 
 ## Лицензии
@@ -80,3 +80,4 @@ git submodule update --init --depth 1
 - Код, гейтвар, прошивка, ПО: [BSD-3-Clause](LICENSE).
 - Аппаратура: CERN-OHL-P v2 (будет добавлена вместе с первой разводкой).
 - Подмодули в `au/` сохраняют свои лицензии.
+- `tools/slogic/usb2/serdes/` — настройка SerDes из [ciniml/fpga_samples](https://github.com/ciniml/fpga_samples), Boost Software License 1.0.

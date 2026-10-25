@@ -1,20 +1,28 @@
 // USB2 HS на SLogic16U3, шаг 1: перечисление и поток на хост. Gowin USB 2.0 SoftPHY (Single LVDS,
 // выводы найдены образом uprobe) + USB 2.0 Device Controller, оба — нетлистами из ip/.
 //
-// Такт: генератор 125 МГц на REFCLK SerDes Q0 → CM1_LIFE_CLK 62,5 МГц (образ sdprobe) →
-// PLL 62,5 × 16 / 25 = 40 МГц → PLL 40 × 24 = 960 МГц: /2 = 480 МГц (fclk SoftPHY), /16 = 60 МГц.
+// Такт: генератор 125 МГц (разрешение — D14) → REFCLK0 SerDes Q0 → линия 0 (Customized PHY, 1,25 Гбит/с,
+// serdes/ — из ciniml/fpga_samples) → tx_pcs_clkout 125 МГц → PLL 125 / 5 × 48 = 1200 / 20 = 60 МГц →
+// PLL 60 × 16 = 960 МГц: /1 = 960 МГц (fclk SoftPHY), /16 = 60 МГц.
+// На Arora V SoftPHY ждёт fclk 960 МГц (IDES16 DDR — 4 отсчёта на бит HS), а не 480, как в IPUG781:
+// с 480 перечисление в FS работает, а приём HS разваливается сразу после SYNC.
+// CM*_LIFE_CLK квада с генератором не связан (на 1,05 % медленнее): с ним FS и приём HS работают,
+// а передача HS — нет (хост не принимает длинные пакеты).
 //
 // EP1 IN (bulk): счётчик 32-битных слов, младший байт первым. Пакет повторяется с того же слова,
 // пока контроллер не отчитался txpktfin — так хост видит разрыв счётчика только при потере.
 // EP1 OUT (bulk): принимается всё, считаются байты.
 //
 // ER2 (0x43): [31:28] 0xA, [0] не отдавать данные (cork), [1] держать контроллер в сбросе,
-//   [2] смена значения — журнал пакетов заново, [3] писать в журнал и SOF; [31:28] 0xB, [15:0] — адрес чтения журнала (слово).
+//   [2] смена значения — журнал пакетов заново, [3] писать в журнал и SOF,
+//   [5:4] данные EP1 IN: 0 счётчик, 1 байты 0x00, 2 байты 0xFF, 3 байты 0x7E,
+//   [15:8] длина пакета EP1 IN в словах (0 — 512 байт в HS, 64 в FS);
+//   [31:28] 0xB, [15:0] — адрес чтения журнала (слово).
 // ER1 (0x42): 0 "RLNB", 1 [7:0] версия, [31:24] seq окна, 2 команда,
 //   3 [0] PLL1, [1] PLL2, [2] сброс, [3] highspeed, [4] online, [5] suspend, [7:6] linestate,
 //     [11:8] последняя активная точка
 //   4 сбросов шины  5 SOF  6 SETUP  7 IN-транзакций EP1  8 txpktfin EP1  9 байт отдано EP1
-//   10 байт принято EP1  11 rxpktval  12 тактов 60 МГц за окно  13 тактов 62,5 МГц за окно
+//   10 байт принято EP1  11 rxpktval  12 тактов 60 МГц за окно  13 тактов 125 МГц за окно
 //   14..22 тактов с dbg_*: rx_nak tx_nak tx_zlp rx_failed tx_failed token_failed token_valid
 //     addr_mismatch endpt_val  23 [12:0] записей журнала, [31] журнал полон
 //   24.. журнал с адреса чтения: на пакет UTMI два слова — {[31] передача, [30] rxerror,
@@ -23,13 +31,16 @@ module top (
     inout wire usb_dxp_io, usb_dxn_io,
     input wire usb_rxdp_i, usb_rxdn_i,
     output wire usb_pullup_en_o,
+    output wire xo_en_o,  // D14: разрешение генератора 125 МГц
     inout wire usb_term_dp_io, usb_term_dn_io,
     input wire tck_pad_i, tms_pad_i, tdi_pad_i,
     output wire tdo_pad_o
 );
-    localparam [7:0] VER = 3;
+    localparam [7:0] VER = 5;
     localparam H = 24, LOG2 = 12;  // журнал: 4К пакетов
     localparam WIN_LOG2 = 24;
+
+    assign xo_en_o = 1'b1;
 
     wire osc;
     OSCB #(.FREQ_MODE("210"), .FREQ_DIV(4), .DYN_TRIM_EN("FALSE")) oscb (
@@ -39,25 +50,32 @@ module top (
     reg [31:0] cmd = 0;
 
     // ---- такты ----
-    reg [19:0] por = 0;  // линия SerDes в сбросе первые ~35 мс
-    always @(posedge osc) if (~&por) por <= por + 1'b1;
-    wire [16:0] pr;
-    Serdes_Top sd (
-        .probe_o(pr),
-        .USB3_0_PHY_Top_pclk(), .USB3_0_PHY_Top_PipeRxData(), .USB3_0_PHY_Top_PipeRxDataK(),
-        .USB3_0_PHY_Top_PipeRxDataValid(), .USB3_0_PHY_Top_RxElecIdle(), .USB3_0_PHY_Top_RxStatus(),
-        .USB3_0_PHY_Top_PhyStatus(), .USB3_0_PHY_Top_PowerPresent(),
-        .USB3_0_PHY_Top_ref_clk(osc), .USB3_0_PHY_Top_phy_resetn(&por),
-        .USB3_0_PHY_Top_PipeTxData(32'd0), .USB3_0_PHY_Top_PipeTxDataK(4'd0),
-        .USB3_0_PHY_Top_TxDetectRx_loopback(1'b0), .USB3_0_PHY_Top_TxElecIdle(1'b1),
-        .USB3_0_PHY_Top_RxPolarity(1'b0), .USB3_0_PHY_Top_RxEqTraining(1'b0),
-        .USB3_0_PHY_Top_RxTermination(1'b0), .USB3_0_PHY_Top_TxOnesZeros(1'b0),
-        .USB3_0_PHY_Top_PowerDown(2'd0), .USB3_0_PHY_Top_ElasticityBufferMode(1'b0));
-    wire refclk62 = pr[10];  // CM1_LIFE_CLK
+    // ~20 мс: снять сброс PMA линии SerDes; ~40 мс: сброс PLL
+    reg [21:0] sdseq = 0;
+    always @(posedge osc) if (~sdseq[21]) sdseq <= sdseq + 1'b1;
+    wire pma_rstn = sdseq[20], pll_rst = ~sdseq[21];
+    wire sd_rxclk, sd_txclk;
+    SerDes_Top sd (
+        .Customized_PHY_Top_q0_ln0_rx_pcs_clkout_o(sd_rxclk),
+        .Customized_PHY_Top_q0_ln0_rx_data_o(), .Customized_PHY_Top_q0_ln0_rx_fifo_rdusewd_o(),
+        .Customized_PHY_Top_q0_ln0_rx_fifo_aempty_o(), .Customized_PHY_Top_q0_ln0_rx_fifo_empty_o(),
+        .Customized_PHY_Top_q0_ln0_rx_valid_o(),
+        .Customized_PHY_Top_q0_ln0_tx_pcs_clkout_o(sd_txclk),
+        .Customized_PHY_Top_q0_ln0_tx_fifo_wrusewd_o(), .Customized_PHY_Top_q0_ln0_tx_fifo_afull_o(),
+        .Customized_PHY_Top_q0_ln0_tx_fifo_full_o(),
+        .Customized_PHY_Top_q0_ln0_refclk_o(), .Customized_PHY_Top_q0_ln0_signal_detect_o(),
+        .Customized_PHY_Top_q0_ln0_rx_cdr_lock_o(), .Customized_PHY_Top_q0_ln0_pll_lock_o(),
+        .Customized_PHY_Top_q0_ln0_ready_o(),
+        .Customized_PHY_Top_q0_ln0_rx_clk_i(sd_rxclk), .Customized_PHY_Top_q0_ln0_rx_fifo_rden_i(1'b0),
+        .Customized_PHY_Top_q0_ln0_tx_clk_i(sd_txclk), .Customized_PHY_Top_q0_ln0_tx_data_i(80'd0),
+        .Customized_PHY_Top_q0_ln0_tx_fifo_wren_i(1'b0),
+        .Customized_PHY_Top_q0_ln0_pma_rstn_i(pma_rstn),
+        .Customized_PHY_Top_q0_ln0_pcs_rx_rst_i(~pma_rstn),
+        .Customized_PHY_Top_q0_ln0_pcs_tx_rst_i(~pma_rstn));
 
-    wire clk40, lock1, fclk480, clk60, lock2;
-    pll_40m p1 (.clkin(refclk62), .clkout0(clk40), .lock(lock1));
-    pll_usb p2 (.clkin(clk40), .clkout0(fclk480), .clkout1(clk60), .lock(lock2));
+    wire clk60a, lock1, fclk960, clk60, lock2;
+    pll_60m p1 (.clkin(sd_txclk), .reset(pll_rst), .clkout0(clk60a), .lock(lock1));
+    pll_usb p2 (.clkin(clk60a), .reset(~lock1), .clkout0(fclk960), .clkout1(clk60), .lock(lock2));
 
     // сброс в домене 60 МГц: после захвата PLL2 и по команде
     reg [2:0] ls = 0;
@@ -125,7 +143,7 @@ module top (
         .utmi_termselect_o(phy_termsel), .utmi_reset_o());
 
     USB2_0_SoftPHY_Top phy (
-        .clk_i(clk60), .rst_i(rst), .fclk_i(fclk480), .pll_locked_i(lock2),
+        .clk_i(clk60), .rst_i(rst), .fclk_i(fclk960), .pll_locked_i(lock2),
         .utmi_data_out_i(phy_dout), .utmi_txvalid_i(phy_txvalid), .utmi_op_mode_i(phy_opmode),
         .utmi_xcvrselect_i(phy_xcvrsel), .utmi_termselect_i(phy_termsel),
         .utmi_data_in_o(phy_din), .utmi_txready_o(phy_txready), .utmi_rxvalid_o(phy_rxvalid),
@@ -141,8 +159,11 @@ module top (
     reg [31:0] word = 0, pkt_word = 0;
     reg [1:0] bsel = 0;
     reg txact_q = 0;
-    assign txdat = word[8 * bsel +: 8];
-    assign txlen = highspeed ? 12'd512 : 12'd64;
+    // тестовые наполнения: 0x00 — переход на каждом бите NRZI, 0xFF — вставка бита каждые 6,
+    // 0x7E — шесть единиц подряд в каждом байте
+    assign txdat = cmd[5:4] == 2'd0 ? word[8 * bsel +: 8] : cmd[5:4] == 2'd1 ? 8'h00 :
+        cmd[5:4] == 2'd2 ? 8'hFF : 8'h7E;
+    assign txlen = cmd[15:8] != 0 ? {cmd[15:8], 2'b00} : highspeed ? 12'd512 : 12'd64;
     // cork действует и на EP0: там ответы на стандартные запросы (дескрипторы) — не задерживать
     assign txcork = endpt == 4'd0 ? 1'b0 : ep1 ? cmd[0] : 1'b1;
     always @(posedge clk60) begin
@@ -244,9 +265,9 @@ module top (
         tmr <= tmr + 1'b1;
         if (&tmr) seq <= seq + 1'b1;
     end
-    wire [31:0] f60, f62;
+    wire [31:0] f60, f125;
     fmeter m60 (.fclk(clk60), .clk(osc), .tick(&tmr), .cnt(f60));
-    fmeter m62 (.fclk(refclk62), .clk(osc), .tick(&tmr), .cnt(f62));
+    fmeter m125 (.fclk(sd_txclk), .clk(osc), .tick(&tmr), .cnt(f125));
 
     // ---- пользовательский JTAG ----
     wire tck, tdi, sh_cap, upd, en1, en2;
@@ -279,7 +300,7 @@ module top (
             10: hw = n_rxb;
             11: hw = n_rxpkt;
             12: hw = f60;
-            13: hw = f62;
+            13: hw = f125;
             14, 15, 16, 17, 18, 19, 20, 21, 22: hw = n_dbg[32 * (w - 14) +: 32];
             23: hw = {lptr[LOG2], {(30 - LOG2){1'b0}}, lptr};
             default: hw = qsel ? qb : qa;

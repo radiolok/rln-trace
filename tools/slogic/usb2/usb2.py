@@ -4,6 +4,7 @@
     RLN_FPGA_USB=1-2 python3 usb2.py           # кадр
     RLN_FPGA_USB=1-2 python3 usb2.py --cork 1  # не отдавать данные EP1 IN (0 — отдавать)
     RLN_FPGA_USB=1-2 python3 usb2.py --reset 1 # держать контроллер в сбросе
+    RLN_FPGA_USB=1-2 python3 usb2.py --pat 2 --len 16  # EP1 IN: байты 0xFF, пакеты по 16 байт
     RLN_FPGA_USB=1-2 python3 usb2.py log -n 200 # журнал пакетов UTMI
     RLN_FPGA_USB=1-2 python3 usb2.py rearm     # журнал заново
 """
@@ -64,13 +65,17 @@ def cmd_log(a):
 
 def cmd_status(a):
     cmds = []
-    if a.cork is not None or a.reset is not None:
+    if a.cork is not None or a.reset is not None or a.pat is not None or a.len is not None:
         w = frame()
-        c = w[2] & 7
+        c = w[2] & 0x0FFFFFFF
         if a.cork is not None:
             c = c & ~1 | a.cork
         if a.reset is not None:
             c = c & ~2 | a.reset << 1
+        if a.pat is not None:
+            c = c & ~0x30 | a.pat << 4
+        if a.len is not None:
+            c = c & ~0xFF00 | (a.len // 4) << 8
         cmds = u.er2(0xA << 28 | c)
     w = u.parse(u.openocd(cmds + u.er1("", NW)), NW)[""]
     t = 2 ** 24 / u.F_OSC
@@ -78,8 +83,8 @@ def cmd_status(a):
     print(f"v{w[1] & 0xFF}, seq {w[1] >> 24}, команда {w[2]:#x}")
     print(f"PLL1 {st & 1}, PLL2 {st >> 1 & 1}, сброс {st >> 2 & 1}, HS {st >> 3 & 1}, online {st >> 4 & 1}, "
           f"suspend {st >> 5 & 1}, linestate {st >> 6 & 3}, точка {st >> 8 & 15}")
-    print(f"60 МГц: {w[12] / t / 1e6:.3f}, 62,5 МГц: {w[13] / t / 1e6:.3f} (по OSCB); "
-          f"отношение {w[12] / max(w[13], 1) * 62.5:.4f} МГц при 62,5 точно")
+    print(f"60 МГц: {w[12] / t / 1e6:.3f}, 125 МГц: {w[13] / t / 1e6:.3f} (по OSCB); "
+          f"отношение {w[12] / max(w[13], 1) * 125:.4f} МГц при 125 точно")
     for i, n in enumerate(NAMES):
         print(f"  {n:18} {w[4 + i]}")
     print("  dbg (тактов): " + ", ".join(f"{n} {w[14 + i]}" for i, n in enumerate(DBG)))
@@ -90,6 +95,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cork", type=int, choices=(0, 1))
     ap.add_argument("--reset", type=int, choices=(0, 1))
+    ap.add_argument("--pat", type=int, choices=(0, 1, 2, 3), help="EP1 IN: 0 счётчик, 1 0x00, 2 0xFF, 3 0x7E")
+    ap.add_argument("--len", type=int, help="длина пакета EP1 IN, байт (кратно 4, до 1020; 0 — по умолчанию)")
     sp = ap.add_subparsers(dest="cmd")
     p = sp.add_parser("log")
     p.add_argument("-n", type=int, default=100)

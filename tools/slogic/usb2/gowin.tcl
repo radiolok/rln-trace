@@ -3,8 +3,9 @@ set_device GW5AT-LV15MG132C1/I0 -device_version B
 add_file usb2.v
 add_file usb_desc.v
 add_file serdes.v
+add_file customized_phy.v
 add_file sdlib.v
-add_file pll_40m.v
+add_file pll_60m.v
 add_file pll_usb.v
 add_file usb2phy.v
 add_file usb2dev.v

@@ -5,20 +5,20 @@
 -part_number GW5AT-LV15MG132C1/I0
 
 
--mod_name pll_40m
--file_name pll_40m
+-mod_name pll_60m
+-file_name pll_60m
 -path C:/Users/Public/rln-usb2-ip/
 -type PLL_ADV
 -file_type vlg
 -ssc false
 -clock_en false
--rst false
+-rst true
 -rst_pwd false
 -rst_i false
 -rst_o false
--fclkin 62.5
+-fclkin 125
 -dyn_idiv_sel false
--idiv_sel 1
+-idiv_sel 5
 -clkfb_sel 0
 -dyn_fbdiv_sel false
 -fbdiv_sel 1
@@ -26,7 +26,7 @@
 -dyn_dpa_en false
 -clkout0_bypass false
 -dyn_odiv0_sel false
--odiv0_sel 25
+-odiv0_sel 20
 -odiv0_frac_sel 0
 -dyn_dt0_sel false
 -clkout0_dt_dir 1
@@ -43,5 +43,5 @@
 -en_clkout6 false
 -en_clkfbout false
 -dyn_mdiv_sel false
--mdiv_sel 16
+-mdiv_sel 48
 -mdiv_frac_sel 0

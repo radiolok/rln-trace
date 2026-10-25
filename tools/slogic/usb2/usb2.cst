@@ -1,16 +1,19 @@
 // USB2 SLogic16U3: Gowin USB 2.0 SoftPHY, Single LVDS (найдено образом tools/slogic/uprobe).
 // Типы — по IPUG781 для Arora V. Пары задаются P-выводом и N-выводом через запятую.
+// В FS работает и обратное назначение (dx = P2/P1), в HS — только это.
 // D13 не трогать: 0 на нём перезапускает конфигурацию ПЛИС.
 
-IO_LOC "usb_dxp_io" P2,P1;  // IOL35A/B банк 3, через 36 Ом на D+/D−
+IO_LOC "usb_dxp_io" K3,K2;  // IOL26A/B банк 4 — пара dx (так у ciniml/fpga_samples, eda/slogic16u3_usb2)
 IO_PORT "usb_dxp_io" IO_TYPE=LVCMOS33D PULL_MODE=NONE DIFF_RESISTOR=OFF DRIVE=8;
 IO_LOC "usb_rxdp_i" H3,H2;  // IOL22A — D+, IOL22B — общее опорное ~0,13 В
 IO_PORT "usb_rxdp_i" IO_TYPE=LVDS25 PULL_MODE=NONE DIFF_RESISTOR=OFF;
 IO_LOC "usb_rxdn_i" M2,M1;  // IOL33A — D−, IOL33B — то же опорное
 IO_PORT "usb_rxdn_i" IO_TYPE=LVDS25 PULL_MODE=NONE DIFF_RESISTOR=OFF;
-IO_LOC "usb_term_dp_io" K3;  // IOL26A, ~100 Ом на D+
+IO_LOC "usb_term_dp_io" P2;  // IOL35A банк 3 — терминатор D+
 IO_PORT "usb_term_dp_io" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "usb_term_dn_io" K2;  // IOL26B, ~100 Ом на D−
+IO_LOC "usb_term_dn_io" P1;  // IOL35B — терминатор D−
 IO_PORT "usb_term_dn_io" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
 IO_LOC "usb_pullup_en_o" C14;  // IOB39B банк 1, 1,5 кОм на D+
 IO_PORT "usb_pullup_en_o" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
+IO_LOC "xo_en_o" D14;  // разрешение генератора 125 МГц (REFCLK SerDes Q0), 1 — работает
+IO_PORT "xo_en_o" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
