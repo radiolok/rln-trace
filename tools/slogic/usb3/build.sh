@@ -5,7 +5,7 @@
 #
 # pclk 125 МГц на GW5AT-15 закрывается не в каждой расстановке, а зерна у PnR Gowin нет: варианты PnR (place_option
 # 1..4) собираются параллельно, в usb3ref.fs идёт тот, у которого pclk выше.
-#   sh build.sh d                                 → usb3d.fs    (свой верх usb3d.v: регистры, поток трассы), 4 варианта
+#   sh build.sh d                                 → usb3d.fs (SRAM по JTAG), usb3d.bin (флеш через DFU, multiboot → DFU)
 #   sh build.sh                                   → usb3ref.fs  (эталонный верх ciniml/board/top.v)
 #   PLACE="3 4" sh build.sh                       — только эти place_option
 #   PNR_EXTRA="replicate_resources=1" sh build.sh — добавить опции ко всем вариантам
@@ -71,6 +71,11 @@ build_one() {
       echo "set_option -output_base_name $N"
       echo "set_option -verilog_std sysv2017"
       for o in done ready cpu i2c sspi; do echo "set_option -use_${o}_as_gpio 1"; done
+      # multiboot на золотой образ (DFU): после записи во флеш кнопка MODE возвращает прибор в DFU
+      echo "set_option -multi_boot 1"
+      echo "set_option -multiboot_spi_flash_address 800000"
+      echo "set_option -multiboot_address_width 24"
+      echo "set_option -bit_format bin"
       for kv in $2; do echo "set_option -${kv%%=*} ${kv#*=}"; done
       echo "run all"; } > "$D/gowin.tcl"
     if (cd "$D" && "$GW/bin/gw_sh.exe" gowin.tcl > build.log 2>&1) && ! grep -q "ERROR" "$D/build.log"; then
@@ -90,6 +95,7 @@ sort -k2 -rn "$R" | sed 's/^/  /'
 BEST=$(grep -v ошибка "$R" | sort -k2 -rn | head -1)
 [ -n "$BEST" ] || { echo "ни один вариант не собрался"; exit 1; }
 set -- $BEST
-rm -f "$HERE/$N.fs"; cp "$B/${N}_$1/impl/pnr/$N.fs" "$HERE/$N.fs"
+rm -f "$HERE/$N.fs" "$HERE/$N.bin"; cp "$B/${N}_$1/impl/pnr/$N.fs" "$HERE/$N.fs"
+[ -f "$B/${N}_$1/impl/pnr/$N.bin" ] && cp "$B/${N}_$1/impl/pnr/$N.bin" "$HERE/$N.bin"
 OK=$(awk -v f="$2" 'BEGIN { print (f >= 125) ? "закрыт" : "НЕ закрыт" }')
 echo "$N.fs ← вариант $1: pclk $2 МГц, тайминг $OK"
