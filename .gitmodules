@@ -38,6 +38,6 @@
 	path = au/mcu-sdk
 	url = https://gitflic.ru/project/baikalelectronics/mcu-sdk.git
 	shallow = true
-[submodule "slogic16u3-trace"]
-	path = slogic16u3-trace
+[submodule "au/slogic16u3-trace"]
+	path = au/slogic16u3-trace
 	url = https://github.com/radiolok/slogic16u3-trace

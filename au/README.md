@@ -15,6 +15,7 @@
 | [`riscv-nexus-trace`](https://github.com/riscv-non-isa/riscv-nexus-trace) | Спецификации RISC-V N-Trace и Trace Control Interface (регистры `trTe*`/`trPib*`, протокол PIB, MSEO), эталонный кодер/декодер `refcode/c/NexRv*` — приём трассы BE-U1000, см. [`doc/beu1000-trace-journal.md`](../doc/beu1000-trace-journal.md) | спецификации CC-BY-4.0, `refcode` — ISC (IAR) |
 | [`mcu-sdk`](https://gitflic.ru/project/baikalelectronics/mcu-sdk) | Baikal MCU SDK 2.4.0 для BE-U1000: OpenOCD (бинарник и скрипты `target/baikal`, `interface/baikal`) — им настраивается трассер, SVD, HAL, описание сборки. Компилятор, HAL, BASIS, FreeRTOS — вложенные подмодули (см. ниже) | BSD-3-Clause (код Байкала), GPL-2.0+ (OpenOCD, тулчейн), MIT (FreeRTOS, TinyUSB) |
 | [`pico-usb-blaster`](https://github.com/thisiseth/pico-usb-blaster) | Протокол Altera USB-Blaster (FT245: bitbang и shift-режим), дескрипторы и EEPROM на tinyUSB — режим совместимости с Quartus | MIT |
+| [`slogic16u3-trace`](https://github.com/radiolok/slogic16u3-trace) | Свой публичный проект: образ usb3d для SLogic16U3 (приём трассы, USB 3.0), утилиты ПК, декодеры, платы, CI и релизы. Код usb3d правится там | BSD-3-Clause, стек USB 3.0 — BSL-1.0 |
 
 Только как референс, без подмодуля: [Teensy_Blaster](https://github.com/Memotech-Bill/Teensy_Blaster) и
 [usbd-blaster](https://github.com/sameer/usbd-blaster) (описание протокола USB-Blaster), [SucréLA](https://gitlab.com/yannsionneau/SucreLA) (LGPL-2.1),

@@ -636,7 +636,7 @@ Windows и usbipd узнают прибор как прежний «SLogic16U3 t
 ## 2026-10-26. Публичный репозиторий slogic16u3-trace, релиз v0.1
 
 Проект «отладка + трасса на SLogic16U3» вынесен в отдельный англоязычный репозиторий
-[slogic16u3-trace](https://github.com/radiolok/slogic16u3-trace) (подмодуль `slogic16u3-trace/`), rln-trace
+[slogic16u3-trace](https://github.com/radiolok/slogic16u3-trace) (подмодуль `au/slogic16u3-trace/`), rln-trace
 остаётся исследовательским. Раскладка: `rtl/` (usb3d, `stream.v` — бывший `u3stream.v`), `rtl/tpiu/tpiu_rx.v` —
 приёмник трассы (IODELAY → IDDR → слова), вынесен из `usb3d.v` отдельным модулем для стенда B, `rtl/usb/` — стек
 ciniml и входы генератора IP; `tools/` — DFU, `usb3d.py`, декодеры `tpiu_decode.py` / `ntrace_decode.py` (только

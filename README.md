@@ -6,7 +6,7 @@
 captures TPIU / RISC-V PIB trace (4 bits, DDR) and streams it to the PC over USB 3.0. BSD-3-Clause.*
 
 > **Публичный проект — [slogic16u3-trace](https://github.com/radiolok/slogic16u3-trace)** (подмодуль
-> [`slogic16u3-trace/`](slogic16u3-trace/), на английском, с CI и готовым образом в релизах). Здесь —
+> [`au/slogic16u3-trace/`](au/slogic16u3-trace/), на английском, с CI и готовым образом в релизах). Здесь —
 > исследовательский репозиторий: журналы, опыты, стенды и прочие варианты зонда.
 
 ## Что это и зачем
@@ -137,7 +137,7 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 
 | Папка | Что внутри |
 |---|---|
-| [`slogic16u3-trace/`](slogic16u3-trace/) | подмодуль: публичный проект — образ usb3d, утилиты ПК, платы, CI |
+| [`au/slogic16u3-trace/`](au/slogic16u3-trace/) | подмодуль: публичный проект — образ usb3d, утилиты ПК, платы, CI |
 | [`tools/slogic/usb3/`](tools/slogic/usb3/) | образ USB 3.0: `usb3d.v` (поток трассы), стек ciniml, сборка, симуляция, линт, утилиты ПК |
 | [`tools/slogic/trace/`](tools/slogic/trace/) | приём трассы с выгрузкой по JTAG (`gw/tracela.v`), декодеры `trace.py` (TPIU/ITM/ETM), `beu1000/ntrace.py` |
 | [`tools/slogic/usb2/`](tools/slogic/usb2/) | образ USB 2.0 HS (SoftPHY Gowin, ядро Daisho) |
