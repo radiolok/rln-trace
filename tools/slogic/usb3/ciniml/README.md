@@ -17,6 +17,7 @@
 |---|---|
 | `usb3_ltssm.veryl` | сравнения `pb_sent`/`tx_after_rx` с порогом — флагами-регистрами при инкременте; вне Polling.LFPS эти счётчики держатся в 0 (как `pb_us` в 15) вместо обнуления при входе; `tseq_cnt`/`skp_cnt` и `idle_sent` обнуляются в первом такте состояния по `st_chg` (регистр), а не из next-state |
 | `usb3_rx_parser.veryl` | CRC-32 в две стадии: слово DPP регистрируется (`cq_*`), CRC — тактом позже; вердикт DPP (`o_dpp_end`/`o_dpp_err`) — ещё тактом позже по зарегистрированному CRC приёма (`dq_*`) |
+| `gen_descriptor_rom.py` → `usb3_descriptor_rom.veryl` | строки производителя, продукта и серийного номера — как у образа USB2: `rln-trace`, `SLogic16U3 trace`, `0001` (VID:PID тот же 1209:0001) |
 | `Veryl.toml` | `-Wno-FUNCTIMECTL -Wno-IMPLICITSTATIC -Wno-ZERODLY`: Verilator 5.05x иначе не компилирует тесты |
 
 Зашифрованные IP Gowin (USB 3.0 PHY, арбитр upar) отсюда не взяты: `build.sh` генерирует их из установленной
