@@ -26,7 +26,7 @@ rln-trace превращает недорогой серийный логиче�
   до **465 МБ/с** на ПК без ошибок; драйвер WinUSB Windows ставит сама (MS OS 2.0)
   ([журнал USB](doc/slogic-usb-journal.md)).
 - **Поток трассы в USB 3.0**: IDDR → FIFO → EP1 IN, счётчики слов и потерь, частотомер TRACECLK, регистры по EP0
-  ([`usb3d.v`](tools/slogic/usb3/usb3d.v)). Приём через USB 3.0 от настоящей цели — проверяется сейчас.
+  ([`usb3d.v`](tools/slogic/usb3/usb3d.v)). BE-U1000 на 50 МГц: 1 ГБ трассы за 20 с без единой потери и ошибки.
 - **Разбор на ПК**: TPIU → ITM/ETM (декодер ETMv3 по правилам OpenCSD) и RISC-V N-Trace по ELF
   ([`trace.py`](tools/slogic/trace/trace.py), [`ntrace.py`](tools/slogic/trace/beu1000/ntrace.py)).
 - **Без доработок и без программатора**: образ пишется во флеш прибора по USB через заводской загрузчик DFU,
@@ -75,7 +75,7 @@ python3 tools/slogic/slogic_dfu.py write tools/slogic/usb3/usb3d.bin --backup sl
 # переподключить USB → 1209:0001 на 5 Гбит/с; вернуть заводскую: MODE, затем slogic_dfu.py restore slogic16u3-factory.bin
 PY="/mnt/c/Program Files/Python310/python.exe"
 "$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py)                         # линк, частота TRACECLK, счётчики
-"$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py) --dly 224 224 224 224 cap -s 5 -o run.bin   # трасса в файл
+"$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py) --dly 208 208 208 208 cap -s 5 -o run.bin   # трасса в файл
 ```
 
 Проводка: TRACED0..3 → CH8..CH11, TRACECLK → CH12, земля — к GND гребёнки.
@@ -116,10 +116,14 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 - [x] USB 2.0 HS своим образом: 46,5 МБ/с под Windows
 - [x] USB 3.0 SuperSpeed: 465 МБ/с, тайминг 125 МГц закрыт
 - [x] Поток трассы в USB 3.0 (`usb3d`): проверен тестовым источником
-- [ ] Поток трассы в USB 3.0 от настоящей цели (BE-U1000, STM32)
+- [x] Поток трассы в USB 3.0 от настоящей цели: BE-U1000 (N-Trace, 50 МГц) — 20 с без потерь
+- [ ] То же для STM32 (TPIU) и TRACECLK выше 50 МГц
 - [ ] Захват без пауз хоста (WinUSB с RAW_IO или Linux)
 - [ ] Мост в Orbuculum и OpenCSD
 - [ ] JTAG/SWD цели (см. выше)
+- [ ] Перевести этот README на английский язык
+- [ ] Добавить возможность собирать 1 и 2 битовый режимы
+- [ ] Добавить CI, а также зарелизить готовый фирмварь
 
 ## Структура
 

@@ -429,6 +429,10 @@ def elf_of(a, d):
 
 
 def cmd_decode(a):
+    if a.file.endswith(".bin"):  # поток usb3d (tools/slogic/usb3/host/usb3d.py cap): слова little-endian
+        import array
+        words = array.array("I", open(a.file, "rb").read()[:4 * a.words] if a.words else open(a.file, "rb").read())
+        return report(tr.nibbles_mode1(words), limit=a.limit, elf=a.elf)
     d = json.load(open(a.file))
     report(tr.nibbles_mode1(d["words"]), limit=a.limit, elf=elf_of(a, d))
 
@@ -486,8 +490,9 @@ def main():
     p.add_argument("--limit", type=int, default=40)
     p.add_argument("--elf", default=ELF)
     p.set_defaults(fn=cmd_cap)
-    p = sub.add_parser("decode", help="разбор сохранённой записи")
+    p = sub.add_parser("decode", help="разбор сохранённой записи (.json tracela или .bin usb3d)")
     p.add_argument("file")
+    p.add_argument("--words", type=int, default=1 << 20, help=".bin: сколько слов разбирать (0 — все)")
     p.add_argument("--limit", type=int, default=40)
     p.add_argument("--elf", default=ELF)
     p.set_defaults(fn=cmd_decode)

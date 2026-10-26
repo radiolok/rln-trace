@@ -61,8 +61,10 @@ def status(d):
           f"sfifo сейчас {r[6] & 0xFFFF}, наибольшее {r[6] >> 16}")
 
 
-def stream(ctx, d, seconds, block, queue, sink):
-    """Асинхронная очередь чтения EP1 IN; sink(bytes) — по порядку. Возвращает (байт, секунд)."""
+def stream(ctx, d, seconds, block, queue, sink, start=None, stop=None):
+    """Асинхронная очередь чтения EP1 IN; sink(bytes) — по порядку; start() — после постановки очереди (включить
+    источник, когда чтения уже ждут: иначе FIFO переполнится до первого чтения); stop() — в конце, до остановки
+    чтений, после него остаток FIFO дочитывается (чтения добирают его и выходят по тайм-ауту). Возвращает (байт, секунд)."""
     st = {"n": 0, "run": True, "fail": None}
     order, done = [], {}
 
@@ -91,10 +93,17 @@ def stream(ctx, d, seconds, block, queue, sink):
     for t in xs:
         t.submit()
         order.append(t)
+    if start:
+        start()
     while time.perf_counter() - t0 < seconds and st["run"]:
         ctx.handleEventsTimeout(0.1)
-    st["run"] = False
     dt = time.perf_counter() - t0
+    if stop and st["run"]:
+        stop()
+        t1 = time.perf_counter()
+        while time.perf_counter() - t1 < 0.5 and st["run"]:
+            ctx.handleEventsTimeout(0.1)
+    st["run"] = False
     while any(t.isSubmitted() for t in xs):
         ctx.handleEventsTimeout(0.1)
     if st["fail"]:
@@ -125,9 +134,8 @@ def cmd_test(ctx, d, a):
         s["back"] += int(np.count_nonzero(diff < 0))
         s["exp"] = int(w[-1]) + 1
 
-    d.ctrl(1, 1)
-    n, dt = stream(ctx, d, a.seconds, a.block, a.queue, sink)
-    d.ctrl(0, 1)
+    n, dt = stream(ctx, d, a.seconds, a.block, a.queue, sink, start=lambda: d.ctrl(1, 1),
+                   stop=lambda: d.ctrl(0, 1))
     time.sleep(0.05)
     nw, gdrop = d.rd(3), d.rd(5)
     print(f"тест rate {a.rate} ({F_PCLK / max(a.rate, 1) * 4 / 1e6:.0f} МБ/с от источника): принято {n / 1e6:.1f} МБ за "
@@ -145,9 +153,8 @@ def cmd_cap(ctx, d, a):
     d.drain()
     d.ctrl(0, 0, clear=True)
     f = open(a.out, "wb")
-    d.ctrl(1, 0)
-    n, dt = stream(ctx, d, a.seconds, a.block, a.queue, f.write)
-    d.ctrl(0, 0)
+    n, dt = stream(ctx, d, a.seconds, a.block, a.queue, f.write, start=lambda: d.ctrl(1, 0),
+                   stop=lambda: d.ctrl(0, 0))
     f.close()
     print(f"трасса: {n} байт за {dt:.2f} с = {n / dt / 1e6:.2f} МБ/с → {a.out}")
     status(d)
