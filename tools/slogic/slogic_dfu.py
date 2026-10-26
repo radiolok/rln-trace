@@ -23,7 +23,8 @@ ID и UID флеш, дамп, карта занятых блоков 64 КиБ, 
 pyftdi) — для вскрытого прибора, когда DFU недоступен.
 
 Нужен pyusb (pip install pyusb) и доступ к 359f:30f1 (udev-правило из
-README прошивальщика). Вход в DFU: кнопка MODE, индикатор мигает красным.
+README прошивальщика). На Windows — тот же скрипт Python Windows (pip install pyusb
+libusb-package), без usbipd. Вход в DFU: кнопка MODE, индикатор мигает красным.
 """
 
 import argparse
@@ -75,7 +76,7 @@ class Bridge:
     def __init__(self, dev, timeout_ms=1000):
         self.dev = dev
         self.timeout = timeout_ms
-        if dev.is_kernel_driver_active(0):
+        if sys.platform != "win32" and dev.is_kernel_driver_active(0):  # на Windows такого понятия нет
             dev.detach_kernel_driver(0)
         dev.set_configuration()
         usb.util.claim_interface(dev, 0)
@@ -167,7 +168,11 @@ def open_flash(ftdi=None):
         uid = b.xfer(b"\x4b", 16, 4)
         cap = 2 ** jid[2] if 16 <= jid[2] <= 28 else 0
         return b, jid, uid, cap
-    dev = usb.core.find(idVendor=VID, idProduct=PID_DFU)
+    backend = None
+    if sys.platform == "win32":  # Python на Windows: libusb из pip-пакета libusb-package, драйвер — WinUSB
+        import libusb_package
+        backend = libusb_package.get_libusb1_backend()
+    dev = usb.core.find(idVendor=VID, idProduct=PID_DFU, backend=backend)
     if dev is None:
         sys.exit("нет 359f:30f1: переведите прибор в DFU кнопкой MODE (мигает красным)")
     b = Bridge(dev)

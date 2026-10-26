@@ -61,20 +61,21 @@ USB (125 МГц) через асинхронный FIFO, копятся в FIFO 
 | Что | Где используется |
 |---|---|
 | Gowin EDA 1.9.12.04 (Windows; лицензия для GW5AT) | синтез и разводка; скрипты зовут её из WSL |
-| WSL2 + [usbipd-win](https://github.com/dorssel/usbipd-win), `pip install pyusb` | запись флеш через DFU из WSL |
 | [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) в `~/.local/opt/oss-cad-suite` | iverilog, Verilator (симуляция, линт) |
 | [Veryl](https://veryl-lang.org) 0.22 (готовый бинарник в `PATH`) | стек USB 3.0 |
-| Python 3 на Windows: `pip install libusb1 numpy` | приём потока |
+| Python 3 на Windows: `pip install libusb1 numpy pyusb libusb-package` | запись флеш через DFU, приём потока |
+| WSL2 (Ubuntu) | сборка (скрипты зовут Gowin EDA из WSL), декодеры |
 
 ### Собрать, загрузить, запустить
 
 ```sh
 sh tools/slogic/usb3/build.sh d                 # IP Gowin из своей EDA, 4 расстановки → usb3d.bin
-# кнопка MODE → DFU (359f:30f1, мигает красным); в WSL: usbipd attach --wsl --hardware-id 359f:30f1
-python3 tools/slogic/slogic_dfu.py dump slogic16u3-factory.bin          # один раз: полный дамп своего прибора
-python3 tools/slogic/slogic_dfu.py write tools/slogic/usb3/usb3d.bin --backup slogic16u3-factory.bin
-# переподключить USB → 1209:0001 на 5 Гбит/с; вернуть заводскую: MODE, затем slogic_dfu.py restore slogic16u3-factory.bin
-PY="/mnt/c/Program Files/Python310/python.exe"
+PY="/mnt/c/Program Files/Python310/python.exe"  # Python Windows: DFU и поток идут без usbipd
+DFU="$PY $(wslpath -w tools/slogic/slogic_dfu.py)"
+# кнопка MODE → DFU (359f:30f1, мигает красным)
+$DFU dump slogic16u3-factory.bin                                        # один раз: полный дамп своего прибора
+$DFU write $(wslpath -w tools/slogic/usb3/usb3d.bin) --backup slogic16u3-factory.bin   # ~50 с, со сверкой
+# переподключить USB → 1209:0001 на 5 Гбит/с; MODE снова даёт DFU; заводская: $DFU restore slogic16u3-factory.bin
 "$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py)                         # линк, частота TRACECLK, счётчики
 "$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py) --dly 208 208 208 208 cap -s 5 -o run.bin   # трасса в файл
 # IODELAY зависит от цели: BE-U1000 — 208, STM32F407 — 40; разбор: ntrace.py decode run.bin / trace.py decode run.bin
@@ -112,7 +113,7 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 ## Статус
 
 - [x] Своя прошивка грузится в SLogic16U3 (флеш через DFU, SRAM через JTAG), прибор возвращается к заводской
-- [ ] Образ usb3d во флеш через DFU — проверить на приборе (multiboot на DFU в образе есть)
+- [x] Образ usb3d во флеш через DFU из Windows, без JTAG: грузится по питанию, MODE возвращает в DFU
 - [x] Разводка входов: все 16 каналов, настройки входов
 - [x] Приём трассы от TRACECLK: STM32F407 до 57 МГц, BE-U1000 на 25 и 50 МГц (буфер в ПЛИС, выгрузка по JTAG)
 - [x] USB 2.0 HS своим образом: 46,5 МБ/с под Windows
