@@ -5,6 +5,10 @@
 *Open-source parallel-trace receiver built on the Sipeed SLogic16U3 logic analyzer: own FPGA image (Gowin GW5AT-15)
 captures TPIU / RISC-V PIB trace (4 bits, DDR) and streams it to the PC over USB 3.0. BSD-3-Clause.*
 
+> **Публичный проект — [slogic16u3-trace](https://github.com/radiolok/slogic16u3-trace)** (подмодуль
+> [`slogic16u3-trace/`](slogic16u3-trace/), на английском, с CI и готовым образом в релизах). Здесь —
+> исследовательский репозиторий: журналы, опыты, стенды и прочие варианты зонда.
+
 ## Что это и зачем
 
 Отладчик показывает, где процессор остановился. Трасса показывает, что он делал на самом деле: каждый переход,
@@ -125,14 +129,15 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 - [ ] Захват без пауз хоста (WinUSB с RAW_IO или Linux)
 - [ ] Мост в Orbuculum и OpenCSD
 - [ ] JTAG/SWD цели (см. выше)
-- [ ] Перевести этот README на английский язык
+- [x] Публичный репозиторий на английском: [slogic16u3-trace](https://github.com/radiolok/slogic16u3-trace)
 - [ ] Добавить возможность собирать 1 и 2 битовый режимы
-- [ ] Добавить CI, а также зарелизить готовый фирмварь
+- [x] CI (линт, тестбенчи, тесты декодеров) и релиз образа v0.1 — в slogic16u3-trace
 
 ## Структура
 
 | Папка | Что внутри |
 |---|---|
+| [`slogic16u3-trace/`](slogic16u3-trace/) | подмодуль: публичный проект — образ usb3d, утилиты ПК, платы, CI |
 | [`tools/slogic/usb3/`](tools/slogic/usb3/) | образ USB 3.0: `usb3d.v` (поток трассы), стек ciniml, сборка, симуляция, линт, утилиты ПК |
 | [`tools/slogic/trace/`](tools/slogic/trace/) | приём трассы с выгрузкой по JTAG (`gw/tracela.v`), декодеры `trace.py` (TPIU/ITM/ETM), `beu1000/ntrace.py` |
 | [`tools/slogic/usb2/`](tools/slogic/usb2/) | образ USB 2.0 HS (SoftPHY Gowin, ядро Daisho) |
