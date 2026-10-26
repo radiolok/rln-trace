@@ -739,10 +739,21 @@ def cmd_lanes(a):
         print(f"TRACED{lane} " + "".join(f"{'+' if v[0] > 100 and v[1] == 0 else '.':>4}" for v in row.values()))
 
 
+def load_bin(path, nwords=0, skip=0):
+    """Поток usb3d (tools/slogic/usb3/host/usb3d.py cap): слова little-endian в формате режима 2."""
+    import array
+    with open(path, "rb") as f:
+        f.seek(4 * skip)
+        words = array.array("I", f.read(4 * nwords) if nwords else f.read())
+    return {"mode": 2, "miss": 0}, words
+
+
 def cmd_show(a):
     """Итоговая трасса: пакеты ITM и ETM, восстановленные инструкции. Полный листинг —
     в файл (--out), на экран — первые строки каждого уровня."""
-    if a.file:
+    if a.file and a.file.endswith(".bin"):
+        h, words = load_bin(a.file, a.words, a.skip)
+    elif a.file:
         d = json.load(open(a.file))
         h, words = d["header"], d["words"]
     else:
@@ -753,9 +764,12 @@ def cmd_show(a):
     off, data, st = tpiu(samples, 4)
     lines = []
     w = lines.append
-    t = 2 ** h["win_log2"] / F_OSC
-    w(f"Запись: {len(words)} слов = {len(samples)} полубайт, TRACECLK {h['tclk'] / t / 1e6:.2f} МГц, "
-      f"IODELAY {h['iodelay']}")
+    if "tclk" in h:
+        t = 2 ** h["win_log2"] / F_OSC
+        w(f"Запись: {len(words)} слов = {len(samples)} полубайт, TRACECLK {h['tclk'] / t / 1e6:.2f} МГц, "
+          f"IODELAY {h['iodelay']}")
+    else:
+        w(f"Запись usb3d: {len(words)} слов = {len(samples)} полубайт")
     w(f"TPIU: синхронизаций полных {st['full']}, полуслов {st['half']}, кадров {st['frames']}; "
       "байтов по ID: " + ", ".join(f"{k}: {len(v)}" for k, v in sorted(data.items(), key=lambda x: str(x[0]))))
     itmb, etmb = bytes(data.get(1, b"")), bytes(data.get(2, b""))
@@ -855,6 +869,10 @@ def func_of(dis, addr):
 
 
 def cmd_decode(a):
+    if a.file.endswith(".bin"):
+        h, words = load_bin(a.file, a.words, a.skip)
+        report(h, words, a.width, a.phi, lanes=a.lanes)
+        return
     if a.file.endswith(".hex"):  # кадр ER1 из симуляции (tb.v): заголовок + буфер
         w = [int(x.replace("x", "0"), 16) for x in open(a.file).read().split()]
         h = header(w[:H])
@@ -946,7 +964,9 @@ def main():
     p.add_argument("--dly", type=int, nargs="+", default=list(range(0, 256, 16)) + [255])
     p.add_argument("--out", default="lanes.json")
     p = sub.add_parser("show", help="итоговая трасса: пакеты ITM/ETM и инструкции")
-    p.add_argument("--file", help="разобрать сохранённую запись вместо новой")
+    p.add_argument("--file", help="разобрать сохранённую запись вместо новой (.json или .bin usb3d)")
+    p.add_argument("--words", type=int, default=1 << 18, help=".bin: сколько слов (0 — все)")
+    p.add_argument("--skip", type=int, default=0, help=".bin: пропустить слов с начала")
     p.add_argument("--save", help="сохранить запись")
     p.add_argument("--dly", type=int, default=32, help="IODELAY всех линий")
     p.add_argument("--alt", type=int, default=1, help="альтернативное кодирование адреса ветвления (ETMIDR[20])")
@@ -959,8 +979,10 @@ def main():
     p.add_argument("--start", type=lambda x: int(x, 0), default=0x8000356)
     p.add_argument("--skip", type=int, default=0, help="какое по счёту появление адреса взять")
     p.add_argument("--count", type=int, default=24)
-    p = sub.add_parser("decode", help="разбор сохранённой записи")
+    p = sub.add_parser("decode", help="разбор сохранённой записи (.json, .hex симуляции или .bin usb3d)")
     p.add_argument("file")
+    p.add_argument("--words", type=int, default=1 << 18, help=".bin: сколько слов (0 — все)")
+    p.add_argument("--skip", type=int, default=0, help=".bin: пропустить слов с начала")
     p.add_argument("--width", type=int, default=4)
     p.add_argument("--lanes", default=LANES)
     p.add_argument("--phi", type=float)

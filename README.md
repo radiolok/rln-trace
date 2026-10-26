@@ -26,7 +26,8 @@ rln-trace превращает недорогой серийный логиче�
   до **465 МБ/с** на ПК без ошибок; драйвер WinUSB Windows ставит сама (MS OS 2.0)
   ([журнал USB](doc/slogic-usb-journal.md)).
 - **Поток трассы в USB 3.0**: IDDR → FIFO → EP1 IN, счётчики слов и потерь, частотомер TRACECLK, регистры по EP0
-  ([`usb3d.v`](tools/slogic/usb3/usb3d.v)). BE-U1000 на 50 МГц: 1 ГБ трассы за 20 с без единой потери и ошибки.
+  ([`usb3d.v`](tools/slogic/usb3/usb3d.v)). BE-U1000 на 50 МГц: 1 ГБ трассы за 20 с без единой потери и ошибки;
+  STM32F407 на 50 МГц: ITM и ETM разбираются по всей записи.
 - **Разбор на ПК**: TPIU → ITM/ETM (декодер ETMv3 по правилам OpenCSD) и RISC-V N-Trace по ELF
   ([`trace.py`](tools/slogic/trace/trace.py), [`ntrace.py`](tools/slogic/trace/beu1000/ntrace.py)).
 - **Без доработок и без программатора**: образ пишется во флеш прибора по USB через заводской загрузчик DFU,
@@ -76,6 +77,7 @@ python3 tools/slogic/slogic_dfu.py write tools/slogic/usb3/usb3d.bin --backup sl
 PY="/mnt/c/Program Files/Python310/python.exe"
 "$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py)                         # линк, частота TRACECLK, счётчики
 "$PY" $(wslpath -w tools/slogic/usb3/host/usb3d.py) --dly 208 208 208 208 cap -s 5 -o run.bin   # трасса в файл
+# IODELAY зависит от цели: BE-U1000 — 208, STM32F407 — 40; разбор: ntrace.py decode run.bin / trace.py decode run.bin
 ```
 
 Проводка: TRACED0..3 → CH8..CH11, TRACECLK → CH12, земля — к GND гребёнки.
@@ -117,7 +119,8 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 - [x] USB 3.0 SuperSpeed: 465 МБ/с, тайминг 125 МГц закрыт
 - [x] Поток трассы в USB 3.0 (`usb3d`): проверен тестовым источником
 - [x] Поток трассы в USB 3.0 от настоящей цели: BE-U1000 (N-Trace, 50 МГц) — 20 с без потерь
-- [ ] То же для STM32 (TPIU) и TRACECLK выше 50 МГц
+- [x] STM32F407 (TPIU: ITM + ETM) через USB 3.0 на 50 МГц — сбои ~1 на 2 млн слов от жгута, нужен переходник
+- [ ] TRACECLK выше 50 МГц через USB 3.0 (переходник вместо проводов)
 - [ ] Захват без пауз хоста (WinUSB с RAW_IO или Linux)
 - [ ] Мост в Orbuculum и OpenCSD
 - [ ] JTAG/SWD цели (см. выше)
