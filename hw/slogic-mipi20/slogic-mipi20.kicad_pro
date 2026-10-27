@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "filename": "slogic-mipi20.kicad_pro",
+    "version": 3
+  },
+  "sheets": [
+    [
+      "53a40a26-5bcf-56a7-9c46-f08be5cfa51f",
+      "Root"
+    ]
+  ],
+  "boards": [],
+  "libraries": {
+    "pinned_footprint_libs": [],
+    "pinned_symbol_libs": []
+  },
+  "schematic": {
+    "legacy_lib_dir": "",
+    "legacy_lib_list": []
+  },
+  "text_variables": {}
+}
