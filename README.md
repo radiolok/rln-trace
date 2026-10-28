@@ -108,10 +108,17 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 выходит не полный уровень, а около 1,2 В — этого хватит, чтобы через «анти-делитель» на адаптере переключить буфер,
 а уже он выдаст на цель уровень её VREF. Обратные линии (TDO, SWO) идут в CH как сейчас трасса.
 
-- [ ] Замерить уровень выхода ПЛИС на гребёнке через делитель и фронты; выбрать буфер (порог, питание от VREF)
-- [ ] Адаптер: MIPI20, буферы TCK/TMS/TDI/nRST с управлением направлением, VREF 1,2–3,6 В, защита
-- [ ] Движок JTAG/SWD в ПЛИС, канал команд по USB 3.0
-- [ ] Протокол на ПК: CMSIS-DAP v2 (OpenOCD, pyOCD, probe-rs без доработок) или драйвер OpenOCD
+Подробный план по этапам D0–D7 — [doc/debug-plan.md](doc/debug-plan.md). Сначала движок отлаживается на
+стенде Tang Nano 20K + F4-Discovery через UART, потом переезжает на CH569 и SLogic16U3.
+
+- [ ] D0: стенд Tang Nano 20K ↔ F4-Discovery, эталоны ST-LINK и FT2232H
+- [ ] D1: JTAG через OpenOCD remote_bitbang по UART — проводка, цель, полный OpenOCD
+- [ ] D2: сдвиговый движок и командный протокол, хост `sw/dbgprobe` на Python
+- [ ] D3: SWD — режим движка и ускоритель транзакций
+- [ ] D4: приём SWO (NRZ и Manchester)
+- [ ] D5: CMSIS-DAP v2 на CH569 (free-dap) — OpenOCD, pyOCD, probe-rs, openFPGALoader
+- [ ] D6: SLogic16U3 — адаптер MIPI20 (буферы 126, 22 Ом), уровень выхода через делитель, тот же движок в образе
+- [ ] D7: Spy-Bi-Wire (MSP430) и cJTAG OScan1
 - [ ] Метки внешних событий (PPS GNSS) в шкале трассы — по входу CH
 
 ## Статус
@@ -128,7 +135,7 @@ SLogic16U3 с полноценным разъёмом **MIPI20** (Cortex Debug+E
 - [ ] TRACECLK выше 50 МГц через USB 3.0 (переходник вместо проводов)
 - [ ] Захват без пауз хоста (WinUSB с RAW_IO или Linux)
 - [ ] Мост в Orbuculum и OpenCSD
-- [ ] JTAG/SWD цели (см. выше)
+- [ ] JTAG/SWD/SWO/cJTAG цели (см. выше и [doc/debug-plan.md](doc/debug-plan.md))
 - [x] Публичный репозиторий на английском: [slogic16u3-trace](https://github.com/radiolok/slogic16u3-trace)
 - [ ] Добавить возможность собирать 1 и 2 битовый режимы
 - [x] CI (линт, тестбенчи, тесты декодеров) и релиз образа v0.1 — в slogic16u3-trace

@@ -11,7 +11,7 @@
 | R2 | Скорость порта | STM32F407: TRACECLK 84 МГц DDR × 4 бита = 84 МБ/с пик; потолок MIPI20 — около 100 МБ/с |
 | R3 | Режим захвата | Непрерывный поток на ПК; минимум — полный интервал между двумя PPS (≤ 84 МБ) |
 | R4 | Метки событий | PPS, SMA1, SMA2, маркеры; шаг единицы нс; привязка к номеру кадра трассы |
-| R5 | Отладка | SWD и 4-проводной JTAG; CMSIS-DAP v2 с JTAG-последовательностями (`DAP_JTAG_Sequence`): OpenOCD, pyOCD, probe-rs, openFPGALoader работают с любой JTAG-целью — ARM, RISC-V, FPGA (SVF). Универсальный сдвиговый движок в ПЛИС; Spy-Bi-Wire (MSP430, через mspdebug) — следующий этап |
+| R5 | Отладка | SWD и 4-проводной JTAG; CMSIS-DAP v2 с JTAG-последовательностями (`DAP_JTAG_Sequence`): OpenOCD, pyOCD, probe-rs, openFPGALoader работают с любой JTAG-целью — ARM, RISC-V, FPGA (SVF). Универсальный сдвиговый движок в ПЛИС; SWO (NRZ и Manchester). Следующие этапы: cJTAG (IEEE 1149.7, OScan1) прозрачным мостом в ПЛИС и Spy-Bi-Wire (MSP430, через mspdebug). План — [`doc/debug-plan.md`](../doc/debug-plan.md) |
 | R6 | Разъём цели | MIPI20 по RISC-V Trace Connectors 1.0 (совпадает с Cortex Debug+ETM); Mictor не поддерживается |
 | R7 | Уровни | VREF 1,2–3,6 В, трансляторы, защита от ESD и перенапряжения, Hi-Z по умолчанию |
 | R8 | Внешние разъёмы | USB-C (USB 3.2 Gen1), SMA1 и SMA2 — двунаправленные триггеры; SMA1 может быть опорой 10 МГц (TTL) |
@@ -20,8 +20,9 @@
 | R11 | Совместимость | Интерфейс трассы повторяет ORBTrace, Orbuculum работает без патчей |
 | R12 | Тулчейн | Открытый (Yosys + nextpnr/Apicula) и проприетарный Gowin EDA |
 
-Вне рамок rev 0.1: функции логического анализатора (их закрывает SLogic16U3), Mictor-38, cJTAG, RVSWD,
-выдача TRIGIN в цель.
+Вне рамок rev 0.1: функции логического анализатора (их закрывает SLogic16U3), Mictor-38, RVSWD,
+выдача TRIGIN в цель. cJTAG в rev 0.1 — только железо (TMSC и TCKC — те же линии, что SWDIO и SWCLK),
+гейтвар — следующим этапом.
 
 ## 2. Структурная схема
 
@@ -254,7 +255,8 @@ VCCPLL ПЛИС — через ферритовую бусину. CH569 сам �
 
 ## 9. План проверки
 
-Стенд для шагов 0–7 описан в [`doc/bench.md`](../doc/bench.md).
+Стенд для шагов 0–7 описан в [`doc/bench.md`](../doc/bench.md). Шаги 6 и 7 (отладочная часть) подробно
+расписаны по этапам D0–D7 в [`doc/debug-plan.md`](../doc/debug-plan.md).
 
 | Шаг | Стенд | Что проверяем |
 |---|---|---|
