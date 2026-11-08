@@ -28,11 +28,16 @@ module top_jtag #(
     output logic       jtrst_n,
     output tri         jsrst_n
 );
+    // reset: S1, and 16 cycles after configuration (flip-flops start at 0)
     logic [2:0] rst_s;
-    wire        rst = rst_s[2];
+    logic [4:0] por = '0;
+    wire        rst = rst_s[2] || !por[4];
 
-    always_ff @(posedge clk27)
+    always_ff @(posedge clk27) begin
         rst_s <= {rst_s[1:0], !s1_n};
+        if (!por[4])
+            por <= por + 1'b1;
+    end
 
     logic rx_strobe, trst, srst, led, tms, tms_oe;
 

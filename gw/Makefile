@@ -18,17 +18,20 @@ UART_SRCS  := cores/uart_tx.sv cores/uart_hex.sv cores/uart_status.sv cores/uart
 STEP0_SRCS := $(HSPI_SRCS) $(HSPIRX_SRCS) $(UART_SRCS) boards/tangnano20k/top_step0.sv
 GEN_SRCS   := cores/tpiu_tx.sv cores/uart_tx.sv cores/uart_status.sv boards/tangnano9k/top_gen.sv
 RBB_SRCS   := cores/uart_rx.sv cores/uart_tx.sv cores/rbb_jtag.sv cores/rbb_uart.sv
+DAP_SRCS   := cores/uart_rx.sv cores/uart_tx.sv cores/dap_core.sv cores/dap_uart.sv
+DAP9K_SRCS := $(DAP_SRCS) boards/tangnano9k/top_dap.sv
 JTAG9K_SRCS := $(RBB_SRCS) boards/tangnano9k/top_jtag.sv
 GOWIN_SIM  := platform/gowin/sim/gowin_prims.sv
 
-TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx rbb_uart
-TESTS := tpiu trace loop rbb hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
+TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx rbb_uart dap_uart
+TESTS := tpiu trace loop rbb dap hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
 
 srcs_tpiu_rx       := $(TPIU_SRCS)
 srcs_selftest_hspi := $(HSPI_SRCS)
 srcs_trace_rx      := $(TRACE_SRCS)
 srcs_hspi_rx       := $(HSPIRX_SRCS)
 srcs_rbb_uart      := $(RBB_SRCS)
+srcs_dap_uart      := $(DAP_SRCS)
 srcs_uart_hex_top  := $(UART_SRCS) test/uart/uart_hex_top.sv
 srcs_tpiu_loop_top := $(TRACE_SRCS) cores/tpiu_tx.sv test/loop/tpiu_loop_top.sv
 
@@ -44,6 +47,9 @@ tb_uart   := test/uart/tb_uart.cpp
 top_rbb   := rbb_uart
 tb_rbb    := test/rbb/tb_rbb.cpp
 vflags_rbb := -GDIV=32
+top_dap   := dap_uart
+tb_dap    := test/dap/tb_dap.cpp
+vflags_dap := -GDIV=4
 
 define hspi_test
 top_$(1)    := selftest_hspi
@@ -77,7 +83,7 @@ CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
 .SECONDEXPANSION:
 .SECONDARY:
 
-all: lint test crc-check synth board-lint board-synth board9k-lint board9k-synth board9k-jtag-lint board9k-jtag-synth
+all: lint test crc-check synth board-lint board-synth board9k-lint board9k-synth board9k-jtag-lint board9k-jtag-synth board9k-dap-lint board9k-dap-synth
 
 lint: $(addprefix lint-,$(TOPS))
 lint-%:
@@ -203,6 +209,25 @@ $(TN9K_OUT)/top_jtag.fs: $(TN9K_OUT)/top_jtag.json $(TN9K)/tangnano9k_jtag.cst
 	@grep -E 'Max frequency' $(TN9K_OUT)/pnr_jtag.log | tail -n 1
 	@grep -P '^Info: \t +(LUT4|ALU|DFF|IOB):' $(TN9K_OUT)/pnr_jtag.log
 
+# Tang Nano 9K, CMSIS-DAP over the UART (top_dap), same pins and DIV as top_jtag
+board9k-dap-lint:
+	$(VERILATOR) --lint-only $(VFLAGS) -Wno-DECLFILENAME --top-module top_dap $(DAP9K_SRCS)
+
+board9k-dap-synth: $(TN9K_OUT)/top_dap.json
+$(TN9K_OUT)/top_dap.json: $(DAP9K_SRCS) $(TN9K_OUT)/div
+	$(BOARD_YOSYS) -l $(TN9K_OUT)/synth_dap.log -p 'read_verilog -sv $(DAP9K_SRCS); chparam -set DIV $(TN9K_DIV) top_dap; synth_gowin -top top_dap -json $@; stat' > /dev/null
+	@echo "== top_dap"; tail -n 45 $(TN9K_OUT)/synth_dap.log | grep -E '$(STAT_RE)' || true
+
+board9k-dap-pnr: $(TN9K_OUT)/top_dap.fs
+$(TN9K_OUT)/top_dap.fs: $(TN9K_OUT)/top_dap.json $(TN9K)/tangnano9k_jtag.cst
+	$(NEXTPNR) --json $< --write $(TN9K_OUT)/top_dap_pnr.json \
+	  --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=$(TN9K)/tangnano9k_jtag.cst \
+	  --freq 27 -l $(TN9K_OUT)/pnr_dap.log > /dev/null 2>&1 \
+	  || { tail -n 30 $(TN9K_OUT)/pnr_dap.log; exit 1; }
+	$(GOWIN_PACK) -d GW1N-9C -o $@ $(TN9K_OUT)/top_dap_pnr.json
+	@grep -E 'Max frequency' $(TN9K_OUT)/pnr_dap.log | tail -n 1
+	@grep -P '^Info: \t +(LUT4|ALU|DFF|IOB|BSRAM):' $(TN9K_OUT)/pnr_dap.log
+
 # Gowin EDA on the Windows side of WSL (gw_sh.exe): a copy of the sources in a
 # Windows temp folder, reports and the bitstream back to $(TN20K_OUT)/gowin.
 GW_SH      ?= /mnt/c/gowin/Gowin_V1.9.12.04_x64/IDE/bin/gw_sh.exe
@@ -226,4 +251,4 @@ clean:
 
 FORCE:
 
-.PHONY: FORCE all lint test crc-check synth board-lint board-synth board-pnr board9k-lint board9k-synth board9k-pnr board9k-jtag-lint board9k-jtag-synth board9k-jtag-pnr board-gowin clean
+.PHONY: FORCE all lint test crc-check synth board-lint board-synth board-pnr board9k-lint board9k-synth board9k-pnr board9k-jtag-lint board9k-jtag-synth board9k-jtag-pnr board9k-dap-lint board9k-dap-synth board9k-dap-pnr board-gowin clean

@@ -91,3 +91,24 @@ openocd -f sw/rbb/stm32f4-rbb-swd.cfg                                 # SWD, т�
 |---|---|---|---|---|
 | 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 214 (2 %) | 128 МГц |
 | 2026-11-08, + SWD | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 232 (2 %) | 132 МГц |
+
+## CMSIS-DAP (`top_dap`)
+
+Третий образ на тех же проводах: [`dap_core`](../../cores/dap_core.sv) — разбор команд CMSIS-DAP v2 и
+сдвиговое ядро в ПЛИС, пакеты целиком. [`dap_uart`](../../cores/dap_uart.sv) передаёт их по UART BL702 кадрами
+`[длина, 2 байта LE][пакет]`. Транспорт отделён от ядра: в SLogic16U3 на его место встанет bulk-эндпоинт USB 3.0.
+Хост — [`sw/dap/dap_uart.py`](../../../sw/dap/dap_uart.py) (проверка на F407, замер скорости).
+
+```sh
+make -C gw board9k-dap-pnr OSS=~/.local/opt/oss-cad-suite/bin/
+openFPGALoader -b tangnano9k -m gw/build/tangnano9k/top_dap.fs
+sw/dap/dap_uart.py /dev/ttyUSB1 --clock 3375000 --kib 64
+```
+
+Команды: Info, HostStatus, Connect, Disconnect, ResetTarget, TransferConfigure, Transfer (SWD; отложенные чтения
+AP, повтор при WAIT), SWJ_Pins, SWJ_Clock, SWJ_Sequence, SWD_Configure, SWD_Sequence, JTAG_Sequence,
+JTAG_Configure. Пакет — 512 байт. TCK/SWCLK — до 27 МГц / 8 = 3,375 МГц (синхронизатор входов).
+
+| Дата | Тулчейн | LUT4 | DFF | BSRAM | Fmax |
+|---|---|---|---|---|---|
+| 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 1857 (21 %) | 847 | 2 | 63 МГц |

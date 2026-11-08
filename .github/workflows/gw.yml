@@ -62,6 +62,11 @@ jobs:
           make -C gw board9k-jtag-lint
           make -C gw board9k-jtag-synth
 
+      - name: Tang Nano 9K, CMSIS-DAP probe (lint, Yosys synth)
+        run: |
+          make -C gw board9k-dap-lint
+          make -C gw board9k-dap-synth
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -71,4 +76,5 @@ jobs:
             gw/build/tangnano20k/synth.log
             gw/build/tangnano9k/synth.log
             gw/build/tangnano9k/synth_jtag.log
+            gw/build/tangnano9k/synth_dap.log
           if-no-files-found: ignore
