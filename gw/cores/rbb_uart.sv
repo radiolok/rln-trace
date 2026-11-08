@@ -13,6 +13,8 @@ module rbb_uart #(
 
     output logic tck,
     output logic tms,
+    output logic tms_oe,
+    input  logic swdio,
     output logic tdi,
     input  logic tdo,
     output logic trst,
@@ -27,7 +29,7 @@ module rbb_uart #(
     rbb_jtag u_jtag (
         .clk, .rst, .cmd, .cmd_valid(rx_strobe),
         .ans, .ans_valid, .ans_ready,
-        .tck, .tms, .tdi, .tdo, .trst, .srst, .led
+        .tck, .tms, .tms_oe, .swdio, .tdi, .tdo, .trst, .srst, .led
     );
 
     uart_tx #(.DIV(DIV)) u_tx (.clk, .rst, .data(ans), .valid(ans_valid), .ready(ans_ready), .tx(txd));

@@ -1,6 +1,7 @@
 // Tang Nano 9K on the bench: JTAG probe for the STM32F4-Discovery (bench step 6,
 // first piece). OpenOCD speaks remote_bitbang to sw/rbb/rbb_bridge.py, which
-// forwards the bytes to the BL702 UART; rbb_jtag drives the pins.
+// forwards the bytes to the BL702 UART; rbb_jtag drives the pins. SWD on the
+// same wires: SWCLK = TCK (PA14), SWDIO = TMS (PA13), sw/rbb/stm32f4-rbb-swd.cfg.
 //
 //   clk27 straight, no PLL; UART DIV = 27 MHz / baud: 9 = 3 Mbaud (default), 18 = 1.5, 27 = 1.
 //   nSRST is open drain (the Discovery has its own pull-up and reset button),
@@ -21,7 +22,7 @@ module top_jtag #(
     output logic       uart_txd,
 
     output logic       jtck,
-    output logic       jtms,
+    inout  tri         jtms,            // TMS / SWDIO
     output logic       jtdi,
     input  logic       jtdo,
     output logic       jtrst_n,
@@ -33,13 +34,14 @@ module top_jtag #(
     always_ff @(posedge clk27)
         rst_s <= {rst_s[1:0], !s1_n};
 
-    logic rx_strobe, trst, srst, led;
+    logic rx_strobe, trst, srst, led, tms, tms_oe;
 
     rbb_uart #(.DIV(DIV)) u_rbb (
         .clk(clk27), .rst, .rxd(uart_rxd), .txd(uart_txd), .rx_strobe,
-        .tck(jtck), .tms(jtms), .tdi(jtdi), .tdo(jtdo), .trst, .srst, .led
+        .tck(jtck), .tms, .tms_oe, .swdio(jtms), .tdi(jtdi), .tdo(jtdo), .trst, .srst, .led
     );
 
+    assign jtms    = tms_oe ? tms : 1'bz;
     assign jtrst_n = !trst;
     assign jsrst_n = srst ? 1'b0 : 1'bz;
 

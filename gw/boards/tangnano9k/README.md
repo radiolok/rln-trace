@@ -65,8 +65,8 @@ TCK/TMS/TDI, `R` — ответ TDO. UART — 3 Мбод (27 МГц / 9), без
 
 | Tang Nano 9K (J5) | Сигнал | STM32F4-Discovery |
 |---|---|---|
-| 34 | TCK | PA14 |
-| 40 | TMS | PA13 |
+| 34 | TCK / SWCLK | PA14 |
+| 40 | TMS / SWDIO | PA13 |
 | 35 | TDI | PA15 |
 | 41 | TDO (подтяжка в ПЛИС) | PB3 |
 | 39 | nTRST | PB4 |
@@ -83,9 +83,11 @@ TCK/TMS/TDI, `R` — ответ TDO. UART — 3 Мбод (27 МГц / 9), без
 make -C gw board9k-jtag-pnr OSS=~/.local/opt/oss-cad-suite/bin/      # TN9K_DIV=27 — 1 Мбод
 openFPGALoader -b tangnano9k -m gw/build/tangnano9k/top_jtag.fs
 sw/rbb/rbb_bridge.py /dev/ttyUSB1 &                                   # канал B BL702
-openocd -f sw/rbb/stm32f4-rbb.cfg
+openocd -f sw/rbb/stm32f4-rbb.cfg                                     # JTAG
+openocd -f sw/rbb/stm32f4-rbb-swd.cfg                                 # SWD, те же провода
 ```
 
 | Дата | Тулчейн | UART | LUT4 | Fmax |
 |---|---|---|---|---|
 | 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 214 (2 %) | 128 МГц |
+| 2026-11-08, + SWD | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 232 (2 %) | 132 МГц |

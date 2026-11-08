@@ -1,5 +1,5 @@
 // rbb_uart: remote_bitbang bytes on the serial line in, pins and answers out.
-// The sender runs one cycle per bit faster than the receiver, so the answer
+// SWD commands on the same pins. The sender runs one cycle per bit faster than the receiver, so the answer
 // queue fills up during a long run of 'R'.
 //
 // SPDX-License-Identifier: BSD-3-Clause
@@ -105,6 +105,34 @@ int main(int argc, char **argv)
 	EXPECT(got == want);
 	if (got != want)
 		std::printf("    got  %s\n    want %s\n", got.c_str(), want.c_str());
+
+	// SWD: SWDIO output enable, {swclk, swdio}, reads of SWDIO ('c') mixed with TDO ('R')
+	got.clear();
+	want.clear();
+	EXPECT_EQ(top->tms_oe, 1);
+	send('o');
+	idle(4);
+	EXPECT_EQ(top->tms_oe, 0);
+	for (int v = 0; v < 4; v++) {
+		send('d' + v);
+		idle(4);
+		EXPECT_EQ(top->tck << 1 | top->tms, v);
+	}
+	for (int i = 0; i < 48; i++) {
+		int d = r.pct(50), t = r.pct(50);
+		top->swdio = d;
+		top->tdo = t;
+		send('d' + (i & 3));
+		bool rd = i % 4 != 1;
+		send(rd ? 'c' : 'R');
+		want += (rd ? d : t) ? '1' : '0';
+	}
+	send('O');
+	idle(DIV * 10 * 20);
+	EXPECT_EQ(top->tms_oe, 1);
+	EXPECT(got == want);
+	if (got != want)
+		std::printf("    swd got  %s\n    swd want %s\n", got.c_str(), want.c_str());
 
 	delete top;
 	std::printf("%s\n", g_failed ? "FAIL" : "ok");
