@@ -17,15 +17,18 @@ HSPIRX_SRCS := cores/async_fifo.sv cores/hspi_rx.sv
 UART_SRCS  := cores/uart_tx.sv cores/uart_hex.sv cores/uart_status.sv cores/uart_mux.sv
 STEP0_SRCS := $(HSPI_SRCS) $(HSPIRX_SRCS) $(UART_SRCS) boards/tangnano20k/top_step0.sv
 GEN_SRCS   := cores/tpiu_tx.sv cores/uart_tx.sv cores/uart_status.sv boards/tangnano9k/top_gen.sv
+RBB_SRCS   := cores/uart_rx.sv cores/uart_tx.sv cores/rbb_jtag.sv cores/rbb_uart.sv
+JTAG9K_SRCS := $(RBB_SRCS) boards/tangnano9k/top_jtag.sv
 GOWIN_SIM  := platform/gowin/sim/gowin_prims.sv
 
-TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx
-TESTS := tpiu trace loop hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
+TOPS  := tpiu_rx trace_rx selftest_hspi hspi_rx rbb_uart
+TESTS := tpiu trace loop rbb hspi8 hspi16 hspi32 hspi16r hspirx8 hspirx16 hspirx32 hspirx16r uart
 
 srcs_tpiu_rx       := $(TPIU_SRCS)
 srcs_selftest_hspi := $(HSPI_SRCS)
 srcs_trace_rx      := $(TRACE_SRCS)
 srcs_hspi_rx       := $(HSPIRX_SRCS)
+srcs_rbb_uart      := $(RBB_SRCS)
 srcs_uart_hex_top  := $(UART_SRCS) test/uart/uart_hex_top.sv
 srcs_tpiu_loop_top := $(TRACE_SRCS) cores/tpiu_tx.sv test/loop/tpiu_loop_top.sv
 
@@ -38,6 +41,9 @@ top_uart  := uart_hex_top
 top_loop  := tpiu_loop_top
 tb_loop   := test/loop/tb_loop.cpp
 tb_uart   := test/uart/tb_uart.cpp
+top_rbb   := rbb_uart
+tb_rbb    := test/rbb/tb_rbb.cpp
+vflags_rbb := -GDIV=32
 
 define hspi_test
 top_$(1)    := selftest_hspi
@@ -71,7 +77,7 @@ CXXFLAGS_TB := -std=c++17 -O1 -I$(CURDIR)/test/common -I$(CURDIR)/test/models \
 .SECONDEXPANSION:
 .SECONDARY:
 
-all: lint test crc-check synth board-lint board-synth board9k-lint board9k-synth
+all: lint test crc-check synth board-lint board-synth board9k-lint board9k-synth board9k-jtag-lint board9k-jtag-synth
 
 lint: $(addprefix lint-,$(TOPS))
 lint-%:
@@ -173,6 +179,30 @@ $(TN9K_OUT)/top_gen.fs: $(TN9K_OUT)/top_gen.json $(TN9K)/tangnano9k.cst $(TN9K)/
 	@grep -E 'Max frequency' $(TN9K_OUT)/pnr.log | tail -n 1
 	@grep -P '^Info: \t +(LUT4|ALU|DFF|IOB|rPLL|IOLOGICO):' $(TN9K_OUT)/pnr.log
 
+# Tang Nano 9K, JTAG probe (top_jtag): remote_bitbang over the BL702 UART, DIV = 27 MHz / baud
+TN9K_DIV   ?= 9
+
+board9k-jtag-lint:
+	$(VERILATOR) --lint-only $(VFLAGS) -Wno-DECLFILENAME --top-module top_jtag $(JTAG9K_SRCS)
+
+$(TN9K_OUT)/div: FORCE
+	@mkdir -p $(@D); echo $(TN9K_DIV) | cmp -s - $@ || echo $(TN9K_DIV) > $@
+
+board9k-jtag-synth: $(TN9K_OUT)/top_jtag.json
+$(TN9K_OUT)/top_jtag.json: $(JTAG9K_SRCS) $(TN9K_OUT)/div
+	$(BOARD_YOSYS) -l $(TN9K_OUT)/synth_jtag.log -p 'read_verilog -sv $(JTAG9K_SRCS); chparam -set DIV $(TN9K_DIV) top_jtag; synth_gowin -top top_jtag -json $@; stat' > /dev/null
+	@echo "== top_jtag"; tail -n 45 $(TN9K_OUT)/synth_jtag.log | grep -E '$(STAT_RE)' || true
+
+board9k-jtag-pnr: $(TN9K_OUT)/top_jtag.fs
+$(TN9K_OUT)/top_jtag.fs: $(TN9K_OUT)/top_jtag.json $(TN9K)/tangnano9k_jtag.cst
+	$(NEXTPNR) --json $< --write $(TN9K_OUT)/top_jtag_pnr.json \
+	  --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=$(TN9K)/tangnano9k_jtag.cst \
+	  --freq 27 -l $(TN9K_OUT)/pnr_jtag.log > /dev/null 2>&1 \
+	  || { tail -n 30 $(TN9K_OUT)/pnr_jtag.log; exit 1; }
+	$(GOWIN_PACK) -d GW1N-9C -o $@ $(TN9K_OUT)/top_jtag_pnr.json
+	@grep -E 'Max frequency' $(TN9K_OUT)/pnr_jtag.log | tail -n 1
+	@grep -P '^Info: \t +(LUT4|ALU|DFF|IOB):' $(TN9K_OUT)/pnr_jtag.log
+
 # Gowin EDA on the Windows side of WSL (gw_sh.exe): a copy of the sources in a
 # Windows temp folder, reports and the bitstream back to $(TN20K_OUT)/gowin.
 GW_SH      ?= /mnt/c/gowin/Gowin_V1.9.12.04_x64/IDE/bin/gw_sh.exe
@@ -196,4 +226,4 @@ clean:
 
 FORCE:
 
-.PHONY: FORCE all lint test crc-check synth board-lint board-synth board-pnr board9k-lint board9k-synth board9k-pnr board-gowin clean
+.PHONY: FORCE all lint test crc-check synth board-lint board-synth board-pnr board9k-lint board9k-synth board9k-pnr board9k-jtag-lint board9k-jtag-synth board9k-jtag-pnr board-gowin clean

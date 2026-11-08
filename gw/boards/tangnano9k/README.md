@@ -55,3 +55,37 @@ openFPGALoader -b tangnano9k gw/build/tangnano9k/top_gen.fs
 |---|---|---|---|---|
 | 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 12 | 487 (6 %) | 91 МГц |
 | 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 84 | 509 (6 %) | 98,6 МГц |
+
+## JTAG-зонд для STM32F4-Discovery (`top_jtag`)
+
+Второй образ этой же платы: первый кусок движка отладки, шаг 6 [стенда](../../../doc/bench.md#отладка-swdjtag).
+OpenOCD работает с драйвером `remote_bitbang`. [`sw/rbb/rbb_bridge.py`](../../../sw/rbb/rbb_bridge.py) передаёт байты из TCP в
+UART BL702 и обратно, а [`rbb_jtag`](../../cores/rbb_jtag.sv) ведёт выводы: один байт ASCII — одно состояние
+TCK/TMS/TDI, `R` — ответ TDO. UART — 3 Мбод (27 МГц / 9), без PLL. Журнал — [`doc/jtag-journal.md`](../../../doc/jtag-journal.md).
+
+| Tang Nano 9K (J5) | Сигнал | STM32F4-Discovery |
+|---|---|---|
+| 34 | TCK | PA14 |
+| 40 | TMS | PA13 |
+| 35 | TDI | PA15 |
+| 41 | TDO (подтяжка в ПЛИС) | PB3 |
+| 39 | nTRST | PB4 |
+| 42 | nSRST, открытый сток | NRST |
+| GND | земля | GND |
+
+Перемычки CN3 на Discovery сняты, USB ST-LINK — только для питания. Выводы трассы 25–33 не заняты, обе
+проводки могут стоять одновременно. Ограничения — [`tangnano9k_jtag.cst`](tangnano9k_jtag.cst).
+
+Светодиоды (горят нулём): 0 — `B` от OpenOCD, 1 — байты по UART, 2 — srst, 3 — trst, 4 — уровень TDO,
+5 — сердцебиение. S1 — сброс.
+
+```sh
+make -C gw board9k-jtag-pnr OSS=~/.local/opt/oss-cad-suite/bin/      # TN9K_DIV=27 — 1 Мбод
+openFPGALoader -b tangnano9k -m gw/build/tangnano9k/top_jtag.fs
+sw/rbb/rbb_bridge.py /dev/ttyUSB1 &                                   # канал B BL702
+openocd -f sw/rbb/stm32f4-rbb.cfg
+```
+
+| Дата | Тулчейн | UART | LUT4 | Fmax |
+|---|---|---|---|---|
+| 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 214 (2 %) | 128 МГц |
