@@ -1,0 +1,66 @@
+// Tang Nano 9K on the bench: JTAG probe for the STM32F4-Discovery (bench step 6,
+// first piece). OpenOCD speaks remote_bitbang to sw/rbb/rbb_bridge.py, which
+// forwards the bytes to the BL702 UART; rbb_jtag drives the pins. SWD on the
+// same wires: SWCLK = TCK (PA14), SWDIO = TMS (PA13), sw/rbb/stm32f4-rbb-swd.cfg.
+//
+//   clk27 straight, no PLL; UART DIV = 27 MHz / baud: 9 = 3 Mbaud (default), 18 = 1.5, 27 = 1.
+//   nSRST is open drain (the Discovery has its own pull-up and reset button),
+//   nTRST push-pull. TDO has the pad pull-up.
+//
+// S1 (pin 4) reset. LEDs (lit low): 0 remote_bitbang 'B', 1 UART activity,
+// 2 srst asserted, 3 trst asserted, 4 TDO level, 5 heartbeat.
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+module top_jtag #(
+    parameter int DIV = 9               // 3 Mbaud
+) (
+    input  logic       clk27,
+    input  logic       s1_n,
+    output logic [5:0] led_n,
+    input  logic       uart_rxd,
+    output logic       uart_txd,
+
+    output logic       jtck,
+    inout  tri         jtms,            // TMS / SWDIO
+    output logic       jtdi,
+    input  logic       jtdo,
+    output logic       jtrst_n,
+    output tri         jsrst_n
+);
+    // reset: S1, and 16 cycles after configuration (flip-flops start at 0)
+    logic [2:0] rst_s;
+    logic [4:0] por = '0;
+    wire        rst = rst_s[2] || !por[4];
+
+    always_ff @(posedge clk27) begin
+        rst_s <= {rst_s[1:0], !s1_n};
+        if (!por[4])
+            por <= por + 1'b1;
+    end
+
+    logic rx_strobe, trst, srst, led, tms, tms_oe;
+
+    rbb_uart #(.DIV(DIV)) u_rbb (
+        .clk(clk27), .rst, .rxd(uart_rxd), .txd(uart_txd), .rx_strobe,
+        .tck(jtck), .tms, .tms_oe, .swdio(jtms), .tdi(jtdi), .tdo(jtdo), .trst, .srst, .led
+    );
+
+    assign jtms    = tms_oe ? tms : 1'bz;
+    assign jtrst_n = !trst;
+    assign jsrst_n = srst ? 1'b0 : 1'bz;
+
+    // activity: ~40 ms after the last byte
+    logic [20:0] act;
+    logic [24:0] beat;
+
+    always_ff @(posedge clk27) begin
+        beat <= beat + 1'b1;
+        if (rx_strobe)
+            act <= '1;
+        else if (act != '0)
+            act <= act - 1'b1;
+    end
+
+    assign led_n = ~{beat[24], jtdo, trst, srst, act != '0, led};
+endmodule

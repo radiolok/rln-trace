@@ -55,3 +55,64 @@ openFPGALoader -b tangnano9k gw/build/tangnano9k/top_gen.fs
 |---|---|---|---|---|
 | 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 12 | 487 (6 %) | 91 МГц |
 | 2026-10-21 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 84 | 509 (6 %) | 98,6 МГц |
+
+## JTAG-зонд для STM32F4-Discovery (`top_jtag`)
+
+Второй образ этой же платы: первый кусок движка отладки, шаг 6 [стенда](../../../doc/bench.md#отладка-swdjtag).
+OpenOCD работает с драйвером `remote_bitbang`. [`sw/rbb/rbb_bridge.py`](../../../sw/rbb/rbb_bridge.py) передаёт байты из TCP в
+UART BL702 и обратно, а [`rbb_jtag`](../../cores/rbb_jtag.sv) ведёт выводы: один байт ASCII — одно состояние
+TCK/TMS/TDI, `R` — ответ TDO. UART — 3 Мбод (27 МГц / 9), без PLL. Журнал — [`doc/jtag-journal.md`](../../../doc/jtag-journal.md).
+
+| Tang Nano 9K (J5) | Сигнал | STM32F4-Discovery |
+|---|---|---|
+| 34 | TCK / SWCLK | PA14 |
+| 40 | TMS / SWDIO | PA13 |
+| 35 | TDI | PA15 |
+| 41 | TDO (подтяжка в ПЛИС) | PB3 |
+| 39 | nTRST | PB4 |
+| 42 | nSRST, открытый сток | NRST |
+| GND | земля | GND |
+
+Перемычки CN3 на Discovery сняты, USB ST-LINK — только для питания. Выводы трассы 25–33 не заняты, обе
+проводки могут стоять одновременно. Ограничения — [`tangnano9k_jtag.cst`](tangnano9k_jtag.cst).
+
+Светодиоды (горят нулём): 0 — `B` от OpenOCD, 1 — байты по UART, 2 — srst, 3 — trst, 4 — уровень TDO,
+5 — сердцебиение. S1 — сброс.
+
+```sh
+make -C gw board9k-jtag-pnr OSS=~/.local/opt/oss-cad-suite/bin/      # TN9K_DIV=27 — 1 Мбод
+openFPGALoader -b tangnano9k -m gw/build/tangnano9k/top_jtag.fs
+sw/rbb/rbb_bridge.py /dev/ttyUSB1 &                                   # канал B BL702
+openocd -f sw/rbb/stm32f4-rbb.cfg                                     # JTAG
+openocd -f sw/rbb/stm32f4-rbb-swd.cfg                                 # SWD, те же провода
+```
+
+| Дата | Тулчейн | UART | LUT4 | Fmax |
+|---|---|---|---|---|
+| 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 214 (2 %) | 128 МГц |
+| 2026-11-08, + SWD | Yosys 0.70 + nextpnr-himbaechel 0.11 | 3 Мбод | 232 (2 %) | 132 МГц |
+
+## CMSIS-DAP (`top_dap`)
+
+Третий образ на тех же проводах: [`dap_core`](../../cores/dap_core.sv) — разбор команд CMSIS-DAP v2 и
+сдвиговое ядро в ПЛИС, пакеты целиком. [`dap_uart`](../../cores/dap_uart.sv) передаёт их по UART BL702 кадрами
+`[длина, 2 байта LE][пакет]`. Транспорт отделён от ядра: в SLogic16U3 на его место встанет bulk-эндпоинт USB 3.0.
+Хост — [`sw/dap/dap_uart.py`](../../../sw/dap/dap_uart.py) (проверка на F407, замер скорости).
+
+```sh
+make -C gw board9k-dap-pnr OSS=~/.local/opt/oss-cad-suite/bin/
+openFPGALoader -b tangnano9k -m gw/build/tangnano9k/top_dap.fs
+sw/dap/dap_uart.py /dev/ttyUSB1 --clock 3375000 --kib 64
+sw/dap/dap_uart.py /dev/ttyUSB1 --clock 3375000 --swo 1000000 -s 5    # SWO: ITM демо-прошивки по PB3
+```
+
+Команды: Info, HostStatus, Connect, Disconnect, ResetTarget, TransferConfigure, Transfer (SWD; отложенные чтения
+AP, повтор при WAIT), SWJ_Pins, SWJ_Clock, SWJ_Sequence, SWD_Configure, SWD_Sequence, JTAG_Sequence,
+JTAG_Configure; SWO в режиме UART ([`swo_rx`](../../cores/swo_rx.sv), буфер 8 КиБ, скорость любая до 27 МГц / 8 —
+фазовый аккумулатор): SWO_Transport, SWO_Mode, SWO_Baudrate, SWO_Control, SWO_Status, SWO_Data. SWO приходит
+по проводу TDO: PB3 в SWD — TRACESWO. Пакет — 512 байт. TCK/SWCLK — до 27 МГц / 8 = 3,375 МГц (синхронизатор входов).
+
+| Дата | Тулчейн | LUT4 | DFF | BSRAM | Fmax |
+|---|---|---|---|---|---|
+| 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 1857 (21 %) | 847 | 2 | 63 МГц |
+| 2026-11-08, + SWO | Yosys 0.70 + nextpnr-himbaechel 0.11 | 2203 (25 %) | — | 6 | 61,5 МГц |
