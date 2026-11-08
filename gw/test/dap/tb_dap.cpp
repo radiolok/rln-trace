@@ -1,7 +1,8 @@
 // dap_uart + dap_core: CMSIS-DAP packets over the serial line against pin-level
 // target models. SWD: a DP (DPIDR, CTRL/STAT with power-up acks, SELECT,
 // RDBUFF) and a MEM-AP (CSW, TAR with auto-increment, DRW) with posted reads
-// and injected WAIT answers. JTAG: a TAP with a 4-bit IR and IDCODE.
+// and injected WAIT answers. JTAG: a TAP with a 4-bit IR and IDCODE. SWO: a
+// UART stream at a rate that does not divide the clock, 2 % off the set one.
 //
 // SPDX-License-Identifier: BSD-3-Clause
 #include <cstdio>
@@ -212,6 +213,29 @@ struct Tap {
 	}
 } tap;
 
+// SWO transmitter: bytes at `swo_cyc` clock cycles per bit (fractional)
+static std::vector<uint8_t> swo_q;
+static size_t swo_i;
+static double swo_cyc, swo_t = -1;
+
+static int swo_line()
+{
+	if (swo_t < 0) {
+		if (swo_i >= swo_q.size())
+			return 1;
+		swo_t = 0;
+	}
+	int bit = (int)(swo_t / swo_cyc);
+	swo_t += 1;
+	if (bit >= 10) {                    // stop bit done
+		swo_i++;
+		swo_t = -1;
+		return 1;
+	}
+	unsigned frame = 0x200 | swo_q[swo_i] << 1;
+	return frame >> bit & 1;
+}
+
 static bool jtag_on;
 static int prev_tck;
 static std::string got;
@@ -236,6 +260,7 @@ static void step()
 	prev_tck = top->tck;
 	top->swdio = line;
 	top->tdo = tap.tdo;
+	top->swo = swo_line();
 
 	int tx = top->txd;
 	if (rx_cnt < 0) {
@@ -327,7 +352,8 @@ int main(int argc, char **argv)
 		swd.mem[i] = 0x1000 + i * 0x11;
 
 	expect_bytes(dap({0x00, 0xFF}), {0x00, 0x02, 0x00, 0x02}, "Info packet size");
-	expect_bytes(dap({0x00, 0xF0}), {0x00, 0x01, 0x03}, "Info caps");
+	expect_bytes(dap({0x00, 0xF0}), {0x00, 0x01, 0x07}, "Info caps");
+	expect_bytes(dap({0x00, 0xFD}), {0x00, 0x04, 0x00, 0x20, 0x00, 0x00}, "Info SWO buffer");
 	expect_bytes(dap({0x00, 0x04}), {0x00, 0x06, '2', '.', '1', '.', '0', 0}, "Info firmware");
 	expect_bytes(dap({0x00, 0x01}), {0x00, 0x00}, "Info vendor");
 	expect_bytes(dap({0x42}), {0xFF}, "unknown command");
@@ -401,6 +427,34 @@ int main(int argc, char **argv)
 	EXPECT_EQ(a.size(), 2u);
 	dap({0x10, 0x80, 0x80, 0, 0, 0, 0});
 	EXPECT_EQ(top->srst, 0);
+
+	// SWO, UART mode: set 2.5 Mbaud, the target sends at 2.55
+	expect_bytes(dap({0x17, 0x01}), {0x17, 0x00}, "SWO_Transport");
+	expect_bytes(dap({0x18, 0x02}), {0x18, 0xFF}, "SWO_Mode Manchester");
+	expect_bytes(dap({0x18, 0x01}), {0x18, 0x00}, "SWO_Mode UART");
+	expect_bytes(dap({0x19, 0x80, 0x96, 0x98, 0x00}), {0x19, 0, 0, 0, 0}, "SWO_Baudrate too high");
+	expect_bytes(dap({0x19, 0xA0, 0x25, 0x26, 0x00}), {0x19, 0xA0, 0x25, 0x26, 0x00}, "SWO_Baudrate 2.5 M");
+	expect_bytes(dap({0x1A, 0x01}), {0x1A, 0x00}, "SWO_Control start");
+	Rnd sr(7);
+	for (int i = 0; i < 300; i++)
+		swo_q.push_back(sr.u32());
+	swo_cyc = 27e6 / 2.55e6;
+	for (long t = 0; swo_i < swo_q.size() && t < 1'000'000; t++)
+		step();
+	for (int i = 0; i < 100; i++)
+		step();
+	expect_bytes(dap({0x1B}), {0x1B, 0x01, 44, 1, 0, 0}, "SWO_Status");
+	a = dap({0x1C, 200, 0});
+	EXPECT_EQ(a.size(), 4u + 200);
+	if (a.size() >= 4) {
+		EXPECT_EQ(a[1], 1);
+		EXPECT_EQ(a[2] | a[3] << 8, 200);
+	}
+	Bytes b = dap({0x1C, 0xFF, 0xFF});
+	a.insert(a.end(), b.begin() + std::min<size_t>(4, b.size()), b.end());
+	expect_bytes(Bytes(a.begin() + std::min<size_t>(4, a.size()), a.end()), swo_q, "SWO_Data");
+	expect_bytes(dap({0x1A, 0x00}), {0x1A, 0x00}, "SWO_Control stop");
+	expect_bytes(dap({0x1B}), {0x1B, 0x00, 0, 0, 0, 0}, "SWO_Status after stop");
 
 	// JTAG: Test-Logic-Reset, Shift-DR, IDCODE in 31 + 1 bits
 	jtag_on = true;

@@ -103,12 +103,16 @@ openocd -f sw/rbb/stm32f4-rbb-swd.cfg                                 # SWD, т�
 make -C gw board9k-dap-pnr OSS=~/.local/opt/oss-cad-suite/bin/
 openFPGALoader -b tangnano9k -m gw/build/tangnano9k/top_dap.fs
 sw/dap/dap_uart.py /dev/ttyUSB1 --clock 3375000 --kib 64
+sw/dap/dap_uart.py /dev/ttyUSB1 --clock 3375000 --swo 1000000 -s 5    # SWO: ITM демо-прошивки по PB3
 ```
 
 Команды: Info, HostStatus, Connect, Disconnect, ResetTarget, TransferConfigure, Transfer (SWD; отложенные чтения
 AP, повтор при WAIT), SWJ_Pins, SWJ_Clock, SWJ_Sequence, SWD_Configure, SWD_Sequence, JTAG_Sequence,
-JTAG_Configure. Пакет — 512 байт. TCK/SWCLK — до 27 МГц / 8 = 3,375 МГц (синхронизатор входов).
+JTAG_Configure; SWO в режиме UART ([`swo_rx`](../../cores/swo_rx.sv), буфер 8 КиБ, скорость любая до 27 МГц / 8 —
+фазовый аккумулатор): SWO_Transport, SWO_Mode, SWO_Baudrate, SWO_Control, SWO_Status, SWO_Data. SWO приходит
+по проводу TDO: PB3 в SWD — TRACESWO. Пакет — 512 байт. TCK/SWCLK — до 27 МГц / 8 = 3,375 МГц (синхронизатор входов).
 
 | Дата | Тулчейн | LUT4 | DFF | BSRAM | Fmax |
 |---|---|---|---|---|---|
 | 2026-11-08 | Yosys 0.70 + nextpnr-himbaechel 0.11 | 1857 (21 %) | 847 | 2 | 63 МГц |
+| 2026-11-08, + SWO | Yosys 0.70 + nextpnr-himbaechel 0.11 | 2203 (25 %) | — | 6 | 61,5 МГц |

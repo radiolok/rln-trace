@@ -24,6 +24,7 @@ module dap_uart #(
     input  logic swdio,
     output logic tdi,
     input  logic tdo,
+    input  logic swo,
     output logic trst,
     output logic srst
 );
@@ -88,7 +89,7 @@ module dap_uart #(
         .clk, .rst,
         .req_we, .req_wa, .req_wd, .req_go,
         .resp_valid, .resp_len, .resp_ra, .resp_rd, .resp_ack,
-        .tck, .tms, .tms_oe, .swdio, .tdi, .tdo, .trst, .srst
+        .tck, .tms, .tms_oe, .swdio, .tdi, .tdo, .swo, .trst, .srst
     );
 
     // ---------------------------------------------------------------- response

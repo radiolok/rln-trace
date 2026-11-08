@@ -1,7 +1,8 @@
 // Tang Nano 9K on the bench: CMSIS-DAP probe for the STM32F4-Discovery (bench
 // step 6, the shifting engine). dap_core takes whole CMSIS-DAP packets framed
 // over the BL702 UART (sw/dap/dap_uart.py); the same wires as top_jtag:
-// TCK/SWCLK, TMS/SWDIO, TDI, TDO, nTRST, nSRST (open drain).
+// TCK/SWCLK, TMS/SWDIO, TDI, TDO, nTRST, nSRST (open drain). SWO comes on the TDO
+// wire (PB3 is TDO in JTAG mode, TRACESWO in SWD mode).
 //
 // S1 (pin 4) reset. LEDs (lit low): 0 SWDIO driven, 1 UART activity,
 // 2 srst asserted, 3 trst asserted, 4 TDO level, 5 heartbeat.
@@ -39,7 +40,7 @@ module top_dap #(
 
     dap_uart #(.CLK_HZ(27000000), .DIV(DIV)) u_dap (
         .clk(clk27), .rst, .rxd(uart_rxd), .txd(uart_txd), .rx_strobe,
-        .tck(jtck), .tms, .tms_oe, .swdio(jtms), .tdi(jtdi), .tdo(jtdo), .trst, .srst
+        .tck(jtck), .tms, .tms_oe, .swdio(jtms), .tdi(jtdi), .tdo(jtdo), .swo(jtdo), .trst, .srst
     );
 
     assign jtms    = tms_oe ? tms : 1'bz;

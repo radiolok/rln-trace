@@ -9,7 +9,9 @@
 // TransferConfigure, Transfer (SWD: posted AP reads, WAIT retries; no value
 // match, match mask or timestamps), SWJ_Pins, SWJ_Clock, SWJ_Sequence,
 // SWD_Configure, JTAG_Sequence, JTAG_Configure (IR lengths ignored),
-// SWD_Sequence. Anything else answers 0xFF. Transfer in JTAG mode answers
+// SWD_Sequence; SWO in UART mode (swo_rx) through DAP_SWO_Data: SWO_Transport,
+// SWO_Mode, SWO_Baudrate, SWO_Control, SWO_Status, SWO_Data. Anything else
+// answers 0xFF. Transfer in JTAG mode answers
 // count 0: OpenOCD drives JTAG with JTAG_Sequence only.
 //
 // One bit on the wire: outputs set and TCK/SWCLK low for `half` cycles, the
@@ -22,7 +24,8 @@
 module dap_core #(
     parameter int CLK_HZ   = 27000000,
     parameter int HALF_MIN = 4,         // TCK <= CLK_HZ / 8
-    parameter int ALOG     = 9          // packet size 2**ALOG bytes
+    parameter int ALOG     = 9,         // packet size 2**ALOG bytes
+    parameter int SWO_LOG  = 13         // SWO buffer 2**SWO_LOG bytes
 ) (
     input  logic            clk,
     input  logic            rst,
@@ -44,6 +47,7 @@ module dap_core #(
     input  logic            swdio,      // the TMS/SWDIO pin read back, asynchronous
     output logic            tdi,
     input  logic            tdo,        // asynchronous
+    input  logic            swo,        // asynchronous; TDO and SWO share a pin on Cortex-M
     output logic            trst,       // asserted high
     output logic            srst        // asserted high
 );
@@ -83,6 +87,7 @@ module dap_core #(
         S_DSEQ, S_DINFO, S_DBYTE, S_DDATA, S_DOUT, S_DCAP,
         S_XFER, S_XREQ, S_XWD, S_XFLUSH, S_XFLUSHD, S_XOP, S_XOPD, S_XFIN, S_XFIND, S_XEND,
         S_XPATCH, S_XPATCH2, S_XPATCH3,
+        S_SWOT, S_SWOM, S_SWOB, S_SWOBD, S_SWOC, S_SWOS, S_SWOD, S_SWODR, S_SWODW, S_SWODW2, S_SWODP, S_SWODP2, S_SWODP3,
         S_OP, S_OPREQ, S_OPTRN, S_OPACK, S_OPDATA, S_OPRP, S_OPRT, S_OPWD, S_OPWP, S_OPWAIT, S_OPIDLE
     } st_t;
     st_t st, get_ret, put_ret, sh_ret, op_ret;
@@ -126,17 +131,37 @@ module dap_core #(
     logic        op_perr;
     logic [15:0] op_retry;
 
-    // SWJ_Clock: half = ceil(CLK_HZ / (2 * hz))
-    logic [33:0] dv_n, dv_d;
-    logic [32:0] dv_r;           // remainder < divisor <= 2**33
-    logic [5:0]  dv_i;
+    // division for SWJ_Clock (half = ceil(CLK_HZ / (2 * hz))) and SWO_Baudrate (step = baud * 2**32 / CLK_HZ)
+    logic [63:0] dv_n;
+    logic [33:0] dv_d;
+    logic [32:0] dv_r;          // remainder < divisor <= 2**33
+    logic [6:0]  dv_i;
+    logic        dv_swo;
+
+    // SWO
+    logic                swo_mode, swo_run, swo_clr, swo_rd, swo_over;
+    logic [31:0]         swo_step, swo_baud;
+    logic [SWO_LOG:0]    swo_count;
+    logic [7:0]          swo_data;
+    logic [15:0]         swo_max, swo_n;
+    /* verilator lint_off UNUSEDSIGNAL */
+    logic [15:0]         swo_ferr;      // bytes with a bad stop bit: for a waveform, not reported over CMSIS-DAP
+    /* verilator lint_on UNUSEDSIGNAL */
+
+    swo_rx #(.FLOG(SWO_LOG)) u_swo (
+        .clk, .rst, .rx(swo), .en(swo_run && swo_mode), .step(swo_step), .clr(swo_clr),
+        .count(swo_count), .rd(swo_rd), .rd_data(swo_data), .overrun(swo_over), .frame_err(swo_ferr)
+    );
+    wire [7:0] swo_status = {swo_over, 6'd0, swo_run};
 
     wire [5:0] nb = bits > 9'd8 ? 6'd8 : bits[5:0];     // bits in the next byte
     wire [7:0] cap_byte = 8'(cap >> (6'd32 - last_n));  // the last last_n bits, first one in bit 0
-    wire [33:0] dv_t = {dv_r, dv_n[33]};
+    wire [33:0] dv_t = {dv_r, dv_n[63]};
 
     always_ff @(posedge clk) begin
-        we <= 1'b0;
+        we      <= 1'b0;
+        swo_clr <= 1'b0;
+        swo_rd  <= 1'b0;
         case (st)
             // ------------------------------------------------ packet
             S_IDLE: if (req_go) begin
@@ -167,6 +192,12 @@ module dap_core #(
                     8'h14: get_ret <= S_JSEQ;
                     8'h15: get_ret <= S_JCFG;
                     8'h1D: get_ret <= S_DSEQ;
+                    8'h17: get_ret <= S_SWOT;
+                    8'h18: get_ret <= S_SWOM;
+                    8'h19: begin get_n <= 4'd4; get_ret <= S_SWOB; end
+                    8'h1A: get_ret <= S_SWOC;
+                    8'h1B: st <= S_SWOS;
+                    8'h1C: begin get_n <= 4'd2; get_ret <= S_SWOD; end
                     default: begin wd <= 8'hFF; st <= S_DONE; end
                 endcase
             end
@@ -236,7 +267,8 @@ module dap_core #(
             S_INFO: begin
                 st <= S_PUT;
                 case (acc[7:0])
-                    8'hF0: begin ob <= 64'h03_01; put_n <= 4'd2; end                    // SWD | JTAG
+                    8'hF0: begin ob <= 64'h07_01; put_n <= 4'd2; end                    // SWD | JTAG | SWO UART
+                    8'hFD: begin ob <= {24'h0, 32'(1 << SWO_LOG), 8'h04}; put_n <= 4'd5; end  // SWO buffer
                     8'hFE: begin ob <= 64'h01_01; put_n <= 4'd2; end                    // packet count
                     8'hFF: begin ob <= {40'h0, 16'(PSIZE), 8'h02}; put_n <= 4'd3; end   // packet size
                     8'h04: begin ob <= 64'h00_30_2E_31_2E_32_06; put_n <= 4'd7; end     // "2.1.0"
@@ -278,22 +310,93 @@ module dap_core #(
                 if (acc[31:0] == 32'd0) begin
                     ob <= 64'hFF; put_n <= 4'd1; st <= S_PUT;
                 end else begin
-                    dv_n <= 34'(CLK_HZ) + {1'b0, acc[31:0], 1'b0} - 34'd1;
-                    dv_d <= {1'b0, acc[31:0], 1'b0};
-                    dv_r <= '0;
-                    dv_i <= 6'd34;
-                    st   <= S_DIV;
+                    dv_n   <= 64'(CLK_HZ) + {31'h0, acc[31:0], 1'b0} - 64'd1;
+                    dv_d   <= {1'b0, acc[31:0], 1'b0};
+                    dv_r   <= '0;
+                    dv_i   <= 7'd64;
+                    dv_swo <= 1'b0;
+                    st     <= S_DIV;
                 end
             end
             S_DIV: begin        // restoring division, the quotient replaces dv_n
-                if (dv_i == 6'd0) begin
-                    half <= dv_n < 34'(HALF_MIN) ? 16'(HALF_MIN) : dv_n > 34'hFFFF ? 16'hFFFF : dv_n[15:0];
-                    ob <= '0; put_n <= 4'd1; st <= S_PUT;
+                if (dv_i == 7'd0) begin
+                    if (dv_swo) begin
+                        swo_step <= dv_n[31:0];
+                        ob <= {32'h0, swo_baud}; put_n <= 4'd4; st <= S_PUT;
+                    end else begin
+                        half <= dv_n < 64'(HALF_MIN) ? 16'(HALF_MIN) : dv_n > 64'hFFFF ? 16'hFFFF : dv_n[15:0];
+                        ob <= '0; put_n <= 4'd1; st <= S_PUT;
+                    end
                 end else begin
                     dv_r <= 33'(dv_t >= dv_d ? dv_t - dv_d : dv_t);
-                    dv_n <= {dv_n[32:0], dv_t >= dv_d};
+                    dv_n <= {dv_n[62:0], dv_t >= dv_d};
                     dv_i <= dv_i - 1'b1;
                 end
+            end
+
+            // ------------------------------------------------ SWO (UART mode, DAP_SWO_Data transport)
+            S_SWOT: begin       // transport: 0 none, 1 DAP_SWO_Data
+                ob <= acc[7:0] <= 8'd1 ? 64'h00 : 64'hFF; put_n <= 4'd1; st <= S_PUT;
+            end
+            S_SWOM: begin       // mode: 0 off, 1 UART (Manchester not supported)
+                if (acc[7:0] <= 8'd1)
+                    swo_mode <= acc[0];
+                ob <= acc[7:0] <= 8'd1 ? 64'h00 : 64'hFF; put_n <= 4'd1; st <= S_PUT;
+            end
+            S_SWOB: begin       // baud rate -> the actual one, 0 = not supported
+                if (acc[31:0] == 32'd0 || acc[31:0] > 32'(CLK_HZ / 8)) begin
+                    ob <= '0; put_n <= 4'd4; st <= S_PUT;
+                end else begin
+                    swo_baud <= acc[31:0];
+                    dv_n     <= {acc[31:0], 32'h0};
+                    dv_d     <= 34'(CLK_HZ);
+                    dv_r     <= '0;
+                    dv_i     <= 7'd64;
+                    dv_swo   <= 1'b1;
+                    st       <= S_DIV;
+                end
+            end
+            S_SWOC: begin       // control: 1 start (empties the buffer), 0 stop
+                swo_run <= acc[0];
+                if (acc[0])
+                    swo_clr <= 1'b1;
+                ob <= '0; put_n <= 4'd1; st <= S_PUT;
+            end
+            S_SWOS: begin       // status, byte count
+                ob <= {24'h0, 32'(swo_count), swo_status}; put_n <= 4'd5; st <= S_PUT;
+            end
+            S_SWOD: begin       // max count -> status, count (2 bytes), data
+                swo_max <= acc[15:0] > 16'(PSIZE - 4) ? 16'(PSIZE - 4) : acc[15:0];
+                swo_n   <= '0;
+                wa      <= ALOG'(3);
+                st      <= S_SWODR;
+            end
+            S_SWODR: begin
+                if (swo_n == swo_max || swo_count == '0)
+                    st <= S_SWODP;
+                else begin
+                    swo_rd <= 1'b1;
+                    st     <= S_SWODW;
+                end
+            end
+            S_SWODW: st <= S_SWODW2;
+            S_SWODW2: begin
+                we <= 1'b1; wa <= wa + 1'b1; wd <= swo_data;
+                swo_n <= swo_n + 1'b1;
+                st    <= S_SWODR;
+            end
+            S_SWODP: begin
+                x_endwa <= wa;
+                we <= 1'b1; wa <= ALOG'(1); wd <= swo_status;
+                st <= S_SWODP2;
+            end
+            S_SWODP2: begin
+                we <= 1'b1; wa <= ALOG'(2); wd <= swo_n[7:0];
+                st <= S_SWODP3;
+            end
+            S_SWODP3: begin
+                we <= 1'b1; wa <= ALOG'(3); wd <= swo_n[15:8];
+                st <= S_XPATCH3;
             end
             S_SWDCFG: begin
                 trn <= acc[1:0];
@@ -628,6 +731,10 @@ module dap_core #(
             trn        <= 2'd0;
             idle_cyc   <= 8'd0;
             wait_retry <= 16'd100;
+            swo_mode   <= 1'b0;
+            swo_run    <= 1'b0;
+            swo_step   <= 32'd0;
+            swo_baud   <= 32'd0;
         end
     end
 endmodule
