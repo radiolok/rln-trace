@@ -43,13 +43,17 @@
 //   TRACECLK      ch[12]   N9, GCLKT_2 and BPLL_T_IN0: global clock and PLL input
 //   TRACED0..3    ch[8..11]
 //   the rest      event inputs (PPS, triggers)
-// The CK0/CK1 header pins were not seen on any FPGA GPIO.
+// The CK0/CK1 header pins were not seen on any FPGA GPIO by the bench probe,
+// but the board trace-out with the FPGA removed (vik-mva-lab, 2026-11,
+// tools/slogic/README.md) puts them on H13/G13 through 33 ohm: to be rechecked.
 //
 // Do not use: JTAG G2 G3 J3 J2 (debug header; GW_JTAG works with ports named
-// tck_pad_i/tms_pad_i/tdi_pad_i/tdo_pad_o and no .cst lines), RECONFIG_N M3,
-// DONE L3, READY M12, MODE1/0 N1 N2, flash L13 L14 M13 K14 K13 M14. Unknown
-// lines (USB mux, LED, DC-DC) are among the remaining bank 1, 3 and 4 pins:
-// keep every pin not listed here as Gowin's default (input).
+// tck_pad_i/tms_pad_i/tdi_pad_i/tdo_pad_o and no .cst lines), RECONFIG_N M3
+// (wired to D13 and the MODE button: D13 low restarts the FPGA), DONE L3,
+// M12 (READY, blue LED, 0 = on), MODE1/0 N1 N2 (N1 also carries the 125 MHz
+// clock), flash L13 L14 M13 K14 K13 M14, OSC_CLK_ON D14 (keep 1), red LED G14,
+// UART F14/E14. M8 is unknown (maybe the SS mux select). Keep every pin not
+// listed here as Gowin's default (input).
 //
 // TODO: USB3 through the Q0 SerDes (Gowin IP), the VL162 orientation mux,
 // clocking (OSCB is ~30 MHz on this die, not the nominal 52.5), trace_rx.
