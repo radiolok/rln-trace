@@ -563,6 +563,56 @@ EP1 IN по USB 3.0 на Windows (`tools/slogic/usb3/host/usb3d.py cap`). `ntrac
 - После ночи usbip-канал к адаптеру платы завис (`mpsse_flush` без прогресса) — OpenOCD пришлось перезапустить
   (сброс МК, прошивку и трассер — заново), `usbipd detach/attach` адаптера.
 
+## 2026-11-13. Модель BE-U1000 в QEMU против кристалла
+
+Никита Шубин выложил модель BE-U1000 для QEMU ([статья на Хабре](https://habr.com/ru/articles/1105944/),
+ветка `n.shubin/landau/be-u1000-rc0` в `git.rulkc.org/pub/scm/landau/qemu/git/baikal/qemu.git`, машина `evu-ba`):
+CLIC с изоляцией Core 0/1, MTIMER, CRU, UART, контроллер сброса; трассер, отладка и почти вся периферия — заглушки.
+Одна и та же проба прогнана в модели и на плате — [`tools/slogic/trace/beu1000/probe/`](../tools/slogic/trace/beu1000/probe).
+
+Методика:
+
+1. Модель: `configure --target-list=riscv32-softmmu --enable-trace-cpu-filter`, `ninja qemu-system-riscv32`.
+   На GCC 11.4 ветка не собирается (`-Werror=maybe-uninitialized` в `rmw_mie`/`rmw_hie`/`rmw_mieh`): `rmw_mie64` в
+   режиме CLIC не заполняет `ret_val`, `csrr mie` отдаёт мусор со стека (`0xffff0aaa`) вместо нуля, как у `mip`.
+   Поправлено локально (CLIC → 0, как у `mip`), в их репозиторий не отправлено.
+2. `probe/qemu.S` — в eFLASH (`-device loader`, вектор сброса 0xa0000000), результаты в SRAM, чтение — `xp` из
+   монитора (`make qemu`). Исключения — обработчик с `mepc += 4`, в слоте пробы — `mcause`.
+3. Плата — `make hw`: `core0.S` в TCMA 0x40010000, `core2.S` — в TCMB Core 2 через окно Core 0 (0x70010000),
+   запуск Core 2 — `SYSCR0 |= 0x60`, `SYSCR2 = 0x40008000`, `SYSCR0 |= 0x10`, отладчик держит его на векторе —
+   `targets CORE_2; resume`. Первое исключение (чтение 0x30000000) — до любого обращения к `mnstatus`.
+
+| | Кристалл | QEMU |
+|---|---|---|
+| Исключение у BR350 | в `mtvec` (`mcause` 0x30000005) | на 0: Smrnmi, после сброса `NMIE = 0` |
+| `mnstatus` (0x744) | illegal instruction | есть |
+| `mtvec` BR350 | режим CLIC намертво: пишем direct — читается `…303` | принимает direct |
+| `misa` BR350 | 0x40903127: RV32IMAFCB + U, X | 0x4010112d: RV32IMAFDC + U |
+| `misa` BM310 | 0x40101106: RV32IMCB + U | 0x40101125: RV32IMAFC + U |
+| Триггеры | 4, `tinfo = 0x4` (только mcontrol), chain/match не держатся | 2, `tinfo = 0x44` (и mcontrol6) |
+| Кодер 0x15104000 | 0x01000008 | 0: заглушка CORE2_PIO (0x151037f4 + 4 КБ) |
+| RAM / PIB / SRAM трассера | 0x8 / 0xa8 / данные | access fault |
+| QSPI0 0x11000000 | 0x01070000 | заглушка CORE2_TRACE (и CORE2_DEBUG там же) |
+| Core Debug 0x0, BEU 0x02020000 | читаются (под отладчиком) | access fault |
+| Код из SRAM на Core 0 | instruction access fault | исполняется |
+| Core 2: TRACE_SEL, SWJTAG, PIO, mailbox | читаются (TRACE_SEL = 0) | access fault |
+| Core 2: кодер и PIB | читаются | заглушка / fault |
+| Core 2: SRAM 0x70000000 | access fault (`mtval` = pc) | доступна: у Core 2 вся шина |
+
+**Для статьи:**
+
+- **Модель придумала NMI, которого нет.** У BR350 включён Smrnmi: после сброса `NMIE = 0`, и первое же исключение
+  уходит на RNMI-вектор — 0. В RM (6.1.1.1) — обычный NMI с `NMITVEC`, пишущий `MEPC`/`MCAUSE`; на кристалле
+  `mnstatus` — illegal instruction, load fault честно приходит в `mtvec`.
+- **Core 2 трассу не даёт, а управляет ею.** Источник трассы — только Core 0 или Core 1 (RM, гл. 16): Core 2
+  выбирает его через TRACE_SEL (у себя по 0x4000A014; в CRU — `SYSCR0.TRACESEL`, сигналы по ИЛИ) и видит регистры
+  кодера и PIB. Имя заглушки CORE2_TRACE в модели сбивает: «трассы Core 2» нет.
+- **У Core 2 своё крошечное адресное пространство.** RM, табл. 3-2: ROM 16 КБ, TCMA 2 КБ, TCMB 8 КБ, PIO/SWJTAG/
+  TRACE_SEL, mailbox — и трассер. SRAM и eFLASH ему не видны, код и данные ему кладёт Core 0 через окна
+  0x7000F800 (TCMA) и 0x70010000 (TCMB). В модели — наоборот: вся шина есть, своих регистров нет.
+- **Кристалл: SRAM не исполняется, `mtvec` только в режиме CLIC**, у BM310 `mtval` при load fault — pc, а не адрес.
+- **ISA по `misa` расходится с моделью у обоих ядер**: у BR350 нет D, зато есть B и X; у BM310 нет A и F.
+
 ## Открытые вопросы
 
 1. ~~Reference Manual~~, ~~отладчик~~, ~~такт PIB~~, ~~ClkCenter/Calibrate/InstMode~~ — см. «Что выяснили
@@ -572,7 +622,8 @@ EP1 IN по USB 3.0 на Windows (`tools/slogic/usb3/host/usb3d.py cap`). `ntrac
 4. ResourceFull без TCODE при включённых метках времени — как отличать от ProgTraceCorrelation.
 5. Ядро 1 (`SYSCR0.TRACESEL`), RAM-приёмник (SRAM), программное управление трассой с самого ядра.
 6. Для Байкала: калибровочный бит со сдвигом, ClkCenter не центрирует, ResourceFull без TCODE и сброс
-   I-CNT, абсолютные метки времени, коды SYNC 2/5 вместо 6/7, номер HTM в RM.
+   I-CNT, абсолютные метки времени, коды SYNC 2/5 вместо 6/7, номер HTM в RM; триггеры без chain, хотя RM
+   обещает; `mtval` = pc у BM310.
 
 ## Что дальше
 
